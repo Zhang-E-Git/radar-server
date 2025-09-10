@@ -252,7 +252,13 @@
         <p class="footer-note">不要修改内容</p>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
     <script>
+        // Supabase 客户端初始化
+        const SUPABASE_URL = 'https://edvljqszrcdamkyhwkwo.supabase.co'; // 替换为你的 URL
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkdmxqcXN6cmNkYW1reWh3a3dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0Nzk3ODEsImV4cCI6MjA3MzA1NTc4MX0.GCg-_jHoWMLWPwAlLQiOynEDL2XW7DTU9CsMUPzpPB4'; // 替换为你的 anon key
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
         // 用于生成唯一ID和默认标题
         let rowIdCounter = 1;
         const defaultTitles = [
@@ -275,25 +281,29 @@
             "https://example.com/position"
         ];
 
-        // 加载数据函数，从 data.json 获取数据
+        // 加载数据函数，从 Supabase 表 rows 获取数据
         async function loadSavedData() {
             try {
-                const response = await fetch('data.json', {cache: "no-store"});
-                if (!response.ok) throw new Error('无法加载数据文件');
-                const rows = await response.json();
+                const { data, error } = await supabase
+                    .from('rows')
+                    .select('*')
+                    .order('id', { ascending: true });
+
+                if (error) throw error;
+
                 const rowsContainer = document.getElementById('rowsContainer');
                 rowsContainer.innerHTML = '';
 
-                if (!Array.isArray(rows) || rows.length === 0) {
+                if (!data || data.length === 0) {
                     loadDefaultData();
                     return;
                 }
 
                 // 更新ID计数器
-                rowIdCounter = Math.max(...rows.map(row => row.id)) + 1;
+                rowIdCounter = Math.max(...data.map(row => row.id)) + 1;
 
                 // 渲染行
-                rows.forEach(row => {
+                data.forEach(row => {
                     renderRow(row);
                 });
             } catch (error) {
@@ -442,7 +452,7 @@
             }
         }
 
-        // 保存所有数据到 data.json (模拟使用 fetch POST)
+        // 保存所有数据到 Supabase 表 rows (先删除全部再插入)
         async function saveAllData() {
             try {
                 const rows = document.querySelectorAll('.row-item');
@@ -462,20 +472,22 @@
                     });
                 });
 
-                // 模拟 POST 请求保存数据
-                const response = await fetch('data.json', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(savedData)
-                });
+                // 先删除所有已有数据
+                const { error: delError } = await supabase
+                    .from('rows')
+                    .delete()
+                    .neq('id', 0); // 删除所有行，因为id不可能是0
 
-                if (!response.ok) {
-                    throw new Error('保存失败，服务器响应错误');
-                }
+                if (delError) throw delError;
 
-                showStatus('保存成功！所有数据已保存到 data.json', 'success');
+                // 插入新的数据
+                const { error: insertError } = await supabase
+                    .from('rows')
+                    .insert(savedData);
+
+                if (insertError) throw insertError;
+
+                showStatus('保存成功！所有数据已保存到 Supabase', 'success');
             } catch (error) {
                 showStatus('保存失败: ' + error.message, 'error');
             }
