@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>逻辑和页面布局</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f5f7fa;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        h1 {
+            color: #2c3e50;
+            font-size: 2.2rem;
+            margin-bottom: 10px;
+        }
+
+        .description {
+            color: #7f8c8d;
+            font-size: 1rem;
+        }
+
+        .rows-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .row-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            transition: box-shadow 0.2s ease;
+        }
+
+        .row-item:hover {
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+        }
+
+        /* 静态标题栏样式 */
+        .title-display {
+            flex: 1;
+            padding: 10px 15px;
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            font-size: 1rem;
+            color: #2c3e50;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+        }
+
+        /* 标题编辑框样式 */
+        .title-edit {
+            flex: 1;
+            padding: 10px 15px;
+            border: 1px solid #3498db;
+            border-radius: 6px;
+            font-size: 1rem;
+            color: #2c3e50;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+        }
+
+        /* URL显示样式 */
+        .url-display {
+            flex: 1;
+            padding: 10px 15px;
+            background-color: #f0f0f0;
+            border: 1px solid #d1d1d1;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            color: #34495e;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            overflow-wrap: anywhere;
+        }
+
+        /* URL编辑框样式 */
+        .url-edit {
+            flex: 1;
+            padding: 10px 15px;
+            border: 1px solid #3498db;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            color: #2c3e50;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+        }
+
+        .action-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .jump-btn {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .jump-btn:hover {
+            background-color: #2980b9;
+        }
+
+        .edit-btn {
+            background-color: #9b59b6;
+            color: white;
+        }
+
+        .edit-btn:hover {
+            background-color: #8e44ad;
+        }
+
+        .edit-link-btn {
+            background-color: #1abc9c;
+            color: white;
+        }
+
+        .edit-link-btn:hover {
+            background-color: #16a085;
+        }
+
+        .add-btn {
+            background-color: #2ecc71;
+            color: white;
+        }
+
+        .add-btn:hover {
+            background-color: #27ae60;
+        }
+
+        .save-btn {
+            background-color: #f39c12;
+            color: white;
+        }
+
+        .save-btn:hover {
+            background-color: #e67e22;
+        }
+
+        .delete-btn {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .delete-btn:hover {
+            background-color: #c0392b;
+        }
+
+        .icon {
+            font-size: 1.1rem;
+        }
+
+        .footer-note {
+            text-align: center;
+            margin-top: 30px;
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+
+        .save-status {
+            text-align: center;
+            margin: 10px 0;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .save-status.success {
+            opacity: 1;
+            background-color: rgba(46, 204, 113, 0.1);
+            color: #27ae60;
+        }
+
+        .save-status.error {
+            opacity: 1;
+            background-color: rgba(231, 76, 60, 0.1);
+            color: #e74c3c;
+        }
+
+        @media (max-width: 768px) {
+            .row-item {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .action-btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>逻辑和页面布局</h1>
+            <p class="description">对应页面设计示例</p>
+        </header>
+
+        <div class="rows-container" id="rowsContainer">
+            <!-- 初始行将通过JS动态加载 -->
+        </div>
+
+        <div style="display: flex; gap: 15px; margin-top: 15px;">
+            <button class="action-btn add-btn" onclick="addNewRow()">
+                <span class="icon">+</span>增加新行
+            </button>
+            <button class="action-btn save-btn" onclick="saveAllData()">
+                <span class="icon">💾</span>保存
+            </button>
+        </div>
+
+        <div class="save-status" id="saveStatus"></div>
+        <p class="footer-note">不要修改内容</p>
+    </div>
+
+    <script>
+        // 用于生成唯一ID和默认标题
+        let rowIdCounter = 1;
+        const defaultTitles = [
+            "基础布局概念",
+            "页面布局原则",
+            "响应式设计基础",
+            "弹性布局技巧",
+            "网格布局应用",
+            "盒模型概念",
+            "定位属性详解"
+        ];
+        
+        // 默认链接数组
+        const defaultLinks = [
+            "https://example.com/layout",
+            "https://example.com/responsive",
+            "https://example.com/flexbox",
+            "https://example.com/grid",
+            "https://example.com/boxmodel",
+            "https://example.com/position"
+        ];
+
+        // 加载数据函数，从 data.json 获取数据
+        async function loadSavedData() {
+            try {
+                const response = await fetch('data.json', {cache: "no-store"});
+                if (!response.ok) throw new Error('无法加载数据文件');
+                const rows = await response.json();
+                const rowsContainer = document.getElementById('rowsContainer');
+                rowsContainer.innerHTML = '';
+
+                if (!Array.isArray(rows) || rows.length === 0) {
+                    loadDefaultData();
+                    return;
+                }
+
+                // 更新ID计数器
+                rowIdCounter = Math.max(...rows.map(row => row.id)) + 1;
+
+                // 渲染行
+                rows.forEach(row => {
+                    renderRow(row);
+                });
+            } catch (error) {
+                showStatus('加载数据失败: ' + error.message, 'error');
+                // 加载默认数据作为备选方案
+                loadDefaultData();
+            }
+        }
+
+        // 加载默认数据
+        function loadDefaultData() {
+            const defaultRow = {
+                id: 1,
+                title: defaultTitles[0],
+                url: defaultLinks[0]
+            };
+            
+            rowIdCounter = 2;
+            renderRow(defaultRow);
+        }
+
+        // 渲染行
+        function renderRow(rowData) {
+            const rowsContainer = document.getElementById('rowsContainer');
+            const newRow = document.createElement('div');
+            newRow.className = 'row-item';
+            newRow.setAttribute('data-id', rowData.id);
+            // 每行始终包含 title-display 和 url-display
+            newRow.innerHTML = `
+                <div class="title-display">${rowData.title}</div>
+                <div class="url-display">${rowData.url || ''}</div>
+                <button class="action-btn jump-btn" title="网页跳转">
+                    <span class="icon">↗</span>网页跳转
+                </button>
+                <button class="action-btn edit-btn" title="编辑">
+                    <span class="icon">✎</span>编辑
+                </button>
+                <button class="action-btn delete-btn" title="删除行">
+                    <span class="icon">✕</span>删除
+                </button>
+            `;
+            rowsContainer.appendChild(newRow);
+            // 绑定按钮事件
+            // 编辑（标题和链接一起）
+            newRow.querySelector('.edit-btn').onclick = function() { editRow(this); };
+            // 删除
+            newRow.querySelector('.delete-btn').onclick = function() { deleteRow(this); };
+            // 跳转按钮逻辑（根据链接内容跳转）
+            const jumpBtn = newRow.querySelector('.jump-btn');
+            jumpBtn.addEventListener('click', function() {
+                const urlElem = newRow.querySelector('.url-display') || newRow.querySelector('.url-edit');
+                let url = urlElem ? urlElem.textContent.trim() : '';
+                if (!url) {
+                    alert('还没有填写跳转链接！');
+                    return;
+                }
+                // 如果没有协议，认为是相对路径（同目录）
+                if (!/^[a-zA-Z]+:\/\//.test(url)) {
+                    url = url.replace(/^\.\//, ''); // 去掉开头的./
+                }
+                window.open(url, '_blank');
+            });
+        }
+
+        // 添加新行函数
+        function addNewRow() {
+            const titleIndex = (rowIdCounter - 1) % defaultTitles.length;
+            const linkIndex = (rowIdCounter - 1) % defaultLinks.length;
+            
+            const newRowData = {
+                id: rowIdCounter,
+                title: defaultTitles[titleIndex],
+                url: defaultLinks[linkIndex]
+            };
+            
+            renderRow(newRowData);
+            rowIdCounter++;
+        }
+
+
+        // 编辑整行（标题和链接一起）功能
+        function editRow(button) {
+            const row = button.closest('.row-item');
+            const titleElem = row.querySelector('.title-display') || row.querySelector('.title-edit');
+            const urlElem = row.querySelector('.url-display') || row.querySelector('.url-edit');
+
+            // 创建编辑状态
+            const titleEdit = document.createElement('div');
+            titleEdit.className = 'title-edit';
+            titleEdit.contentEditable = true;
+            titleEdit.textContent = titleElem.textContent.trim();
+
+            const urlEdit = document.createElement('div');
+            urlEdit.className = 'url-edit';
+            urlEdit.contentEditable = true;
+            urlEdit.textContent = urlElem.textContent.trim();
+
+            row.replaceChild(titleEdit, titleElem);
+            row.replaceChild(urlEdit, urlElem);
+
+            button.innerHTML = '<span class="icon">✓</span>完成编辑';
+
+            function handleEnter(e) {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.target.blur();
+                }
+            }
+            titleEdit.addEventListener("keydown", handleEnter);
+            urlEdit.addEventListener("keydown", handleEnter);
+
+            let doneCount = 0;
+            function checkDone() {
+                doneCount++;
+                if (doneCount >= 2) finishEdit();
+            }
+
+            titleEdit.addEventListener("blur", checkDone);
+            urlEdit.addEventListener("blur", checkDone);
+
+            function finishEdit() {
+                const newTitle = titleEdit.textContent.trim();
+                const newUrl = urlEdit.textContent.trim();
+
+                const titleDisplay = document.createElement('div');
+                titleDisplay.className = 'title-display';
+                titleDisplay.textContent = newTitle;
+
+                const urlDisplay = document.createElement('div');
+                urlDisplay.className = 'url-display';
+                urlDisplay.textContent = newUrl;
+
+                row.replaceChild(titleDisplay, titleEdit);
+                row.replaceChild(urlDisplay, urlEdit);
+
+                button.innerHTML = '<span class="icon">✎</span>编辑';
+                button.onclick = function() { editRow(button); };
+            }
+        }
+
+        // 删除行
+        function deleteRow(button) {
+            const row = button.closest('.row-item');
+            if (confirm('确定要删除此行吗？')) {
+                row.remove();
+            }
+        }
+
+        // 保存所有数据到 data.json (模拟使用 fetch POST)
+        async function saveAllData() {
+            try {
+                const rows = document.querySelectorAll('.row-item');
+                const savedData = [];
+                
+                rows.forEach((row) => {
+                    const id = parseInt(row.getAttribute('data-id'));
+                    let titleElem = row.querySelector('.title-display') || row.querySelector('.title-edit');
+                    let urlElem = row.querySelector('.url-display') || row.querySelector('.url-edit');
+                    const title = titleElem ? titleElem.textContent.trim() : '';
+                    const url = urlElem ? urlElem.textContent.trim() : '';
+
+                    savedData.push({
+                        id: id,
+                        title: title,
+                        url: url
+                    });
+                });
+
+                // 模拟 POST 请求保存数据
+                const response = await fetch('data.json', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(savedData)
+                });
+
+                if (!response.ok) {
+                    throw new Error('保存失败，服务器响应错误');
+                }
+
+                showStatus('保存成功！所有数据已保存到 data.json', 'success');
+            } catch (error) {
+                showStatus('保存失败: ' + error.message, 'error');
+            }
+        }
+
+        // 显示状态提示
+        function showStatus(message, type = 'success') {
+            const statusElement = document.getElementById('saveStatus');
+            statusElement.textContent = message;
+            statusElement.className = 'save-status ' + type;
+            
+            setTimeout(() => {
+                statusElement.className = 'save-status';
+            }, 3000);
+        }
+
+        // 页面加载时初始化
+        window.addEventListener('DOMContentLoaded', async () => {
+            await loadSavedData();
+        });
+    </script>
+</body>
+</html>
