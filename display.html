@@ -5,40 +5,55 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>展示页面</title>
 <style>
-body { font-family: Arial; background:#f5f5f5; padding:20px; }
+body { font-family: Arial, sans-serif; background:#f5f5f5; padding:20px; }
 .container { max-width:800px; margin:0 auto; }
-.row-item { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:white; border-radius:6px; margin-bottom:10px; box-shadow:0 2px 4px rgba(0,0,0,0.08);}
-.jump-btn { background:#3498db; color:white; border:none; padding:6px 12px; border-radius:5px; cursor:pointer; }
+h1 { text-align:center; margin-bottom:20px; }
+.row-item {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:12px 16px; background:white; border-radius:6px; margin-bottom:10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+}
+.row-item span { font-weight:500; }
+.jump-btn {
+    background:#3498db; color:white; border:none; padding:6px 12px; border-radius:5px;
+    cursor:pointer; transition:0.2s;
+}
 .jump-btn:hover { background:#2980b9; }
 </style>
 </head>
 <body>
 <div class="container">
-<h1>展示页面</h1>
-<div id="rowsContainer"></div>
+    <h1>展示页面</h1>
+    <div id="rowsContainer"></div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script>
-const SUPABASE_URL = 'https://edvljqszrcdamkyhwkwo.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkdmxqcXN6cmNkYW1reWh3a3dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0Nzk3ODEsImV4cCI6MjA3MzA1NTc4MX0.GCg-_jHoWMLWPwAlLQiOynEDL2XW7DTU9CsMUPzpPB4';
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
-async function loadDisplayData(){
-    const { data, error } = await supabase.from('rows').select('*').order('id');
+  const supabaseUrl = 'https://edvljqszrcdamkyhwkwo.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkdmxqcXN6cmNkYW1reWh3a3dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0Nzk3ODEsImV4cCI6MjA3MzA1NTc4MX0.GCg-_jHoWMLWPwAlLQiOynEDL2XW7DTU9CsMUPzpPB4';
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+  async function loadData() {
+    const { data: rows, error } = await supabase.from('rows').select('*');
+    console.log('rows', rows, 'error', error);
     const container = document.getElementById('rowsContainer');
     container.innerHTML = '';
-    if(error) { container.innerHTML='加载数据失败'; return; }
-    data.forEach(row=>{
+    if (error) return alert('加载失败: ' + error.message);
+
+    rows.forEach(row => {
         const div = document.createElement('div');
-        div.className='row-item';
-        div.innerHTML=`<span>${row.title}</span><button class="jump-btn">跳转</button>`;
-        div.querySelector('.jump-btn').addEventListener('click',()=>window.open(row.url,'_blank'));
+        div.className = 'row-item';
+        div.innerHTML = `
+            <span>${row.title}</span>
+            <button class="jump-btn">跳转</button>
+        `;
+        div.querySelector('.jump-btn').addEventListener('click', () => window.open(row.url, '_blank'));
         container.appendChild(div);
     });
-}
+  }
 
-window.addEventListener('DOMContentLoaded', loadDisplayData);
+  window.addEventListener('DOMContentLoaded', loadData);
 </script>
 </body>
 </html>
