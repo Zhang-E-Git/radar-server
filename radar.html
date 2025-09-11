@@ -117,7 +117,17 @@
 
     function randomBlips(n=3){
       const pts=[]; const radius=(state.r/state.gridStep)*0.98;
-      for(let i=0;i<n;i++){const rr=Math.sqrt(Math.random())*radius;const th=Math.random()*Math.PI*2;pts.push({wx:rr*Math.cos(th),wy:rr*Math.sin(th)});} state.blips=pts;
+      for(let i=0;i<n;i++){
+        const rr=Math.sqrt(Math.random())*radius;
+        const th=Math.random()*Math.PI*2;
+        pts.push({wx:rr*Math.cos(th),wy:rr*Math.sin(th),color:"red"});
+      }
+      // 添加固定颜色的标记点
+      pts.push({ wx: 2, wy: 1, color: "green" });
+      pts.push({ wx: -2, wy: -1.5, color: "green" });
+      pts.push({ wx: 1.5, wy: -2, color: "blue" });
+      pts.push({ wx: -1, wy: 2, color: "gray" });
+      state.blips=pts;
     }
 
     // =============== 绘制：网格、扇形、红点 ===============
@@ -140,6 +150,16 @@
       ctx.restore();
       // 外圈
       ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.setLineDash([]); ctx.lineWidth=1.5; ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.stroke();
+
+      // NSEW 标识
+      ctx.fillStyle = "white";
+      ctx.font = `${Math.floor(R*0.1)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("N", cx, cy-R+15);
+      ctx.fillText("S", cx, cy+R-15);
+      ctx.fillText("E", cx+R-15, cy);
+      ctx.fillText("W", cx-R+15, cy);
     }
 
     function drawSector(){
@@ -154,8 +174,27 @@
     }
 
     function drawBlips(){
-      const pulse=(Math.sin(state.t)+1)/2; // 0~1
-      for(const b of state.blips){ const {x,y}=worldToScreen(b.wx,b.wy); if(!insideCircle(x,y)) continue; const r=4+pulse*2; ctx.beginPath(); ctx.fillStyle=`rgba(255,59,48,${0.12+0.18*pulse})`; ctx.arc(x,y,r*2.4,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.fillStyle='#ff3b30'; ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); }
+      const pulse=(Math.sin(state.t)+1)/2;
+      for(const b of state.blips){
+        const {x,y}=worldToScreen(b.wx,b.wy);
+        if(!insideCircle(x,y)) continue;
+        const r=4+pulse*2;
+        ctx.beginPath();
+        ctx.fillStyle=`rgba(255,255,255,${0.12+0.18*pulse})`;
+        ctx.arc(x,y,r*2.4,0,Math.PI*2);
+        ctx.fill();
+
+        // 根据颜色绘制点
+        let c = "#ff3b30"; // 默认红
+        if(b.color==="green") c="#1aff1a";
+        if(b.color==="blue")  c="#3399ff";
+        if(b.color==="gray")  c="#aaaaaa";
+
+        ctx.beginPath();
+        ctx.fillStyle=c;
+        ctx.arc(x,y,r,0,Math.PI*2);
+        ctx.fill();
+      }
     }
 
     function render(){

@@ -1,0 +1,201 @@
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能硬件答题页面</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        watch: {
+                            bg: '#1c1c1e',
+                            face: '#2c2c2e',
+                            accent: '#3a7bd5',
+                            light: '#f5f5f7',
+                            gray: '#8e8e93',
+                            correct: '#34c759',
+                            wrong: '#ff3b30'
+                        }
+                    },
+                    fontFamily: {
+                        watch: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .watch-circle {
+                border-radius: 50%;
+                box-shadow: 0 0 0 8px #1c1c1e, 0 0 0 10px #333;
+                position: relative;
+                overflow: hidden;
+            }
+            .option-active {
+                color: theme('colors.watch.accent');
+                transform: scale(1.1);
+                font-weight: bold;
+            }
+            .fade-out {
+                animation: fadeOut 0.5s forwards;
+            }
+            .fade-in {
+                animation: fadeIn 0.5s forwards;
+            }
+            @keyframes fadeOut {
+                from { opacity: 1; transform: scale(1); }
+                to { opacity: 0; transform: scale(0.8); display: none; }
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; transform: scale(0.8); }
+                to { opacity: 1; transform: scale(1); }
+            }
+        }
+    </style>
+</head>
+<body class="bg-watch-bg min-h-screen flex flex-col items-center justify-center font-watch text-watch-light p-4 gap-4">
+    <!-- 外部操作按钮 - 位于上方，居中排列 -->
+    <div class="flex justify-center items-center gap-2 z-20">
+        <button id="leftBtn" class="bg-watch-bg text-watch-light w-10 h-10 rounded-full flex items-center justify-center shadow-lg">
+            <i class="fa fa-rotate-left"></i>
+        </button>
+        <button id="okBtn" class="bg-watch-accent text-watch-light w-12 h-12 rounded-full flex items-center justify-center shadow-lg">OK</button>
+        <button id="rightBtn" class="bg-watch-bg text-watch-light w-10 h-10 rounded-full flex items-center justify-center shadow-lg">
+            <i class="fa fa-rotate-right"></i>
+        </button>
+    </div>
+    
+    <!-- 手表屏幕 - 圆形区域，增大40% -->
+    <div class="relative w-[294px] h-[294px] md:w-[392px] md:h-[392px] watch-circle bg-watch-face flex flex-col items-center justify-between p-6 z-10">
+        
+        <!-- 任务目标（屏幕内顶部，居中对齐） -->
+        <div class="text-watch-gray text-xs tracking-wider text-center mt-2 w-full">任务目标</div>
+        
+        <!-- 标题 -->
+        <div class="text-xl md:text-2xl font-semibold">答题</div>
+        
+        <!-- 题目区域 -->
+        <div class="text-center flex-grow flex flex-col justify-center items-center">
+            <p id="questionText" class="text-sm md:text-base mb-4 px-2">高庄曾获得清朝哪位皇帝的御赐匾额？</p>
+            
+            <!-- 选项 -->
+            <div id="optionsContainer" class="flex flex-col items-center gap-2 mt-2">
+                <div id="optionA" class="option-active transition-all duration-300">A、康熙</div>
+                <div id="optionB" class="transition-all duration-300">B、雍正</div>
+                <div id="optionC" class="transition-all duration-300">C、乾隆</div>
+            </div>
+        </div>
+        
+        <!-- 提示文字移至表盘底部 -->
+        <p id="hintText" class="text-watch-gray text-xs text-center mb-2">转动旋钮切换选择，点击OK确认</p>
+    </div>
+    
+    <!-- 原表盘底部文本移至表盘外下方 -->
+    <div class="text-watch-gray text-xs text-center mt-2 z-10">答题交互页面示例</div>
+
+    <script>
+        // 等待DOM完全加载后执行
+        document.addEventListener('DOMContentLoaded', function() {
+            // 确保所有元素都已正确获取
+            const leftBtn = document.getElementById('leftBtn');
+            const rightBtn = document.getElementById('rightBtn');
+            const okBtn = document.getElementById('okBtn');
+            const questionText = document.getElementById('questionText');
+            const optionsContainer = document.getElementById('optionsContainer');
+            const hintText = document.getElementById('hintText');
+            const options = ['optionA', 'optionB', 'optionC'];
+            
+            // 验证关键元素是否存在
+            if (!leftBtn || !rightBtn || !okBtn || !questionText || !optionsContainer || !hintText) {
+                console.error('关键DOM元素缺失，无法初始化交互');
+                return;
+            }
+            
+            // 答题数据
+            let currentIndex = 0;
+            const correctAnswer = 'optionC'; // 正确答案是乾隆
+            const feedbacks = {
+                'optionA': '回答错误。高庄获得的是乾隆皇帝的御赐匾额，而非康熙。',
+                'optionB': '回答错误。高庄获得的是乾隆皇帝的御赐匾额，而非雍正。',
+                'optionC': '回答正确！高庄原名西溪山庄，为清代高士奇所建，园林布局精巧，融合了江南园林的亭台水榭之美，康熙曾御赐‘竹窗’匾额，进去参观一下吧。'
+            };
+            
+            // 更新选项选择状态
+            function updateSelection() {
+                options.forEach(optionId => {
+                    const elem = document.getElementById(optionId);
+                    if (elem) {
+                        if (optionId === options[currentIndex]) {
+                            elem.classList.add('option-active');
+                        } else {
+                            elem.classList.remove('option-active');
+                        }
+                    }
+                });
+            }
+            
+            // 处理答案提交
+            function submitAnswer() {
+                const selectedOption = options[currentIndex];
+                
+                // 隐藏选项
+                optionsContainer.classList.add('fade-out');
+                
+                // 更新题目文本为解析
+                questionText.textContent = feedbacks[selectedOption];
+                questionText.classList.add(selectedOption === correctAnswer ? 'text-watch-correct' : 'text-watch-wrong');
+                
+                // 更新提示文字
+                hintText.textContent = '点击OK返回重新答题';
+                
+                // 更改OK按钮功能为重置
+                okBtn.removeEventListener('click', submitAnswer);
+                okBtn.addEventListener('click', resetQuiz);
+            }
+            
+            // 重置答题
+            function resetQuiz() {
+                // 恢复题目文本
+                questionText.textContent = '高庄曾获得清朝哪位皇帝的御赐匾额？';
+                questionText.classList.remove('text-watch-correct', 'text-watch-wrong');
+                
+                // 显示选项
+                optionsContainer.classList.remove('fade-out');
+                optionsContainer.style.display = 'flex';
+                
+                // 恢复提示文字
+                hintText.textContent = '转动旋钮切换选择，点击OK确认';
+                
+                // 重置选择
+                currentIndex = 0;
+                updateSelection();
+                
+                // 恢复OK按钮功能为提交
+                okBtn.removeEventListener('click', resetQuiz);
+                okBtn.addEventListener('click', submitAnswer);
+            }
+            
+            // 绑定按钮事件
+            leftBtn.addEventListener('click', () => {
+                currentIndex = (currentIndex - 1 + options.length) % options.length;
+                updateSelection();
+            });
+            
+            rightBtn.addEventListener('click', () => {
+                currentIndex = (currentIndex + 1) % options.length;
+                updateSelection();
+            });
+            
+            okBtn.addEventListener('click', submitAnswer);
+            
+            // 初始化选择状态
+            updateSelection();
+        });
+    </script>
+</body>
+</html>
+    
