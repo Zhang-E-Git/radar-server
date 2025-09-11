@@ -151,15 +151,19 @@
       // 外圈
       ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.setLineDash([]); ctx.lineWidth=1.5; ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.stroke();
 
-      // NSEW 标识
+      // NSEW 标识随设备朝向旋转
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(-state.headingRad); // 逆时针旋转，使得N指向现实北
       ctx.fillStyle = "white";
       ctx.font = `${Math.floor(R*0.1)}px sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("N", cx, cy-R+15);
-      ctx.fillText("S", cx, cy+R-15);
-      ctx.fillText("E", cx+R-15, cy);
-      ctx.fillText("W", cx-R+15, cy);
+      ctx.fillText("N", 0, -R+15);
+      ctx.fillText("S", 0, R-15);
+      ctx.fillText("E", R-15, 0);
+      ctx.fillText("W", -R+15, 0);
+      ctx.restore();
     }
 
     function drawSector(){
