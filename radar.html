@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>寻宝雷达 · 平滑缩放&半透明经纬线</title>
+  <title>寻宝雷达 · 圆形信息显示</title>
   <style>
     :root {
       --bg: #000;
@@ -11,6 +11,9 @@
       --btn-border: #2a2a2a;
       --btn-text: #eaeaea;
       --accent: #1ea36a;
+      --radar-bg-inner: #0e5b40;
+      --radar-bg-middle: #0c4c37;
+      --radar-bg-outer: #093c2c;
     }
 
     html, body { margin: 0; height: 100%; background: var(--bg); color: #fff; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Helvetica Neue",Arial,"Noto Sans","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; }
@@ -26,27 +29,99 @@
     .page { width: 100%; max-width: 560px; }
     .hidden { display: none !important; }
 
-    /* 雷达/指南针画布区域 */
+    /* 雷达/信息画布区域 */
     .square-wrap { width: 100%; aspect-ratio: 1/1; position: relative; display: grid; place-items: center; margin-top: 6px; border-radius: 16px; overflow: hidden; }
 
-    /* 雷达画布背景（绿色圆） */
-    #radar { display: block; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #0e5b40 0%, #0c4c37 55%, #093c2c 100%); box-shadow: 0 0 40px rgba(30,163,106,.25) inset, 0 0 120px rgba(30,163,106,.15) inset; }
+    /* 圆形显示区域（雷达和信息共享） */
+    .circle-display {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 50%, var(--radar-bg-inner) 0%, var(--radar-bg-middle) 55%, var(--radar-bg-outer) 100%);
+      box-shadow: 0 0 40px rgba(30,163,106,.25) inset, 0 0 120px rgba(30,163,106,.15) inset;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #radar {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
 
     .legend { opacity: .75; font-size: 12px; margin-top: 6px; }
 
-    /* 指南针样式 */
-    .compass-surface { aspect-ratio: 1/1; width: 100%; border-radius: 16px; background: radial-gradient(circle at 50% 50%, #0b0b0b 0%, #050505 100%); display: grid; place-items: center; position: relative; }
-    .rose { position: absolute; inset: 10%; border-radius: 50%; border: 1px solid #2f2f2f; }
-    .tick { position: absolute; left: 50%; top: 50%; width: 2px; height: 12%; transform-origin: bottom center; background: #3a3a3a; }
-    .label { position: absolute; font-weight: 700; }
-    .label.n { top: 6%; left: 50%; transform: translateX(-50%); color: #ff4d4f; }
-    .label.s { bottom: 6%; left: 50%; transform: translateX(-50%); }
-    .label.e { right: 6%; top: 50%; transform: translateY(-50%); }
-    .label.w { left: 6%; top: 50%; transform: translateY(-50%); }
-    .needle { position: absolute; width: 2px; height: 38%; background: linear-gradient(#ff4d4f, #991a1d); transform-origin: bottom center; bottom: 50%; left: 50%; transform: translateX(-50%) rotate(0deg); box-shadow: 0 0 10px rgba(255,77,79,.45); }
-    .center-dot { position: absolute; width: 10px; height: 10px; background: #ddd; border-radius: 50%; left: 50%; top: 50%; transform: translate(-50%,-50%); box-shadow: 0 0 12px rgba(255,255,255,.25) inset; }
-
-    .top-chip { position:absolute; top:8px; left:50%; transform:translateX(-50%); font-size:12px; opacity:.9; background:rgba(0,0,0,.35); padding:4px 8px; border-radius:8px; border:1px solid #2a2a2a; }
+    /* 信息部分样式 - 适应圆形区域 */
+    .info-content { 
+      width: 100%; 
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      display: flex; 
+      flex-direction: column; 
+      justify-content: center; 
+      align-items: center; 
+      padding: 20% 10%;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+    
+    .info-item {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      font-size: 14px;
+      z-index: 1;
+    }
+    
+    .info-item:last-child {
+      border-bottom: none;
+    }
+    
+    .info-label {
+      color: #aaa;
+    }
+    
+    .info-value {
+      color: #fff;
+      font-weight: 600;
+    }
+    
+    .signal-strong {
+      color: var(--accent);
+    }
+    
+    .progress-container {
+      width: 100%;
+      height: 6px;
+      background-color: rgba(255,255,255,0.1);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 3px;
+    }
+    
+    .progress-bar {
+      height: 100%;
+      background-color: var(--accent);
+    }
+    
+    .top-chip { 
+      position: absolute; 
+      top: 10%; 
+      left: 50%; 
+      transform: translateX(-50%); 
+      font-size: 12px; 
+      opacity: .9; 
+      background: rgba(0,0,0,0.3); 
+      padding: 3px 8px; 
+      border-radius: 6px; 
+      border: 1px solid rgba(255,255,255,0.1);
+      z-index: 1;
+    }
 
     /* 雷达页的授权按钮 */
     .perm-btn { margin-top: 8px; padding: 10px 12px; font-size: 13px; border-radius: 10px; border: 1px solid #2a2a2a; background: #111; color: #eee; width: 100%; max-width: 560px; }
@@ -56,33 +131,59 @@
   <div class="app">
     <div class="controls" role="group" aria-label="雷达控制">
       <button id="btn-left" class="btn" aria-label="缩小网格比例尺">左</button>
-      <button id="btn-confirm" class="btn" aria-label="按住显示指南针">确认</button>
+      <button id="btn-confirm" class="btn" aria-label="按住显示信息">确认</button>
       <button id="btn-right" class="btn" aria-label="放大网格比例尺">右</button>
     </div>
 
     <!-- 雷达页面 -->
     <section id="radarPage" class="page">
-      <div class="square-wrap"><canvas id="radar" aria-label="雷达"></canvas></div>
-      <div class="legend">左=缩小比例尺，右=放大比例尺；支持<strong>鼠标滚轮平滑缩放</strong>；按住“确认”显示指南针；授权地磁传感器后，转动方向，红点相对位置会实时变化，扇形始终指向前方。</div>
+      <div class="square-wrap">
+        <div class="circle-display">
+          <canvas id="radar" aria-label="雷达"></canvas>
+        </div>
+      </div>
+      <div class="legend">左=缩小比例尺，右=放大比例尺；支持<strong>鼠标滚轮平滑缩放</strong>；按住“确认”显示信息；授权地磁传感器后，转动方向，标记点相对位置会实时变化。</div>
       <button id="requestPerm" class="perm-btn">授权方向/地磁传感器（iOS 需授权）</button>
     </section>
 
-    <!-- 指南针页面 -->
-    <section id="compassPage" class="page hidden">
+    <!-- 信息页面 - 现在在圆形区域内显示 -->
+    <section id="infoPage" class="page hidden">
       <div class="square-wrap">
-        <div class="compass-surface">
-          <div class="rose"></div>
-          <div class="tick" style="transform: translate(-50%,-100%) rotate(0deg);"></div>
-          <div class="tick" style="transform: translate(-50%,-100%) rotate(90deg);"></div>
-          <div class="tick" style="transform: translate(-50%,-100%) rotate(180deg);"></div>
-          <div class="tick" style="transform: translate(-50%,-100%) rotate(270deg);"></div>
-          <div class="label n">N</div>
-          <div class="label e">E</div>
-          <div class="label s">S</div>
-          <div class="label w">W</div>
-          <div id="needle" class="needle"></div>
-          <div class="center-dot"></div>
-          <div id="headingTxt" class="top-chip">朝向：--°</div>
+        <div class="circle-display">
+          <div class="info-content">
+            <div class="top-chip">探索信息</div>
+            
+            <div class="info-item">
+              <span class="info-label">设备电量</span>
+              <span class="info-value">100%</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">GPS信号</span>
+              <span class="info-value signal-strong">强</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">路线名称</span>
+              <span class="info-value">湿地探索路线A</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">探索时长</span>
+              <span class="info-value">1h15m</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">已探索点位</span>
+              <span class="info-value">3/10</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">完成进度</span>
+              <div class="progress-container">
+                <div class="progress-bar" style="width: 30%;"></div>
+              </div>
+            </div>
+            <div class="info-item">
+              <span class="info-label">分数</span>
+              <span class="info-value">8/20</span>
+            </div>
+          </div>
         </div>
       </div>
       <div class="legend">松开“确认”返回雷达。</div>
@@ -115,22 +216,30 @@
 
     function insideCircle(x,y){const dx=x-state.center.x,dy=y-state.center.y;return dx*dx+dy*dy<=state.r*state.r;}
 
-    function randomBlips(n=3){
+    function randomBlips(){
       const pts=[]; const radius=(state.r/state.gridStep)*0.98;
-      for(let i=0;i<n;i++){
-        const rr=Math.sqrt(Math.random())*radius;
-        const th=Math.random()*Math.PI*2;
-        pts.push({wx:rr*Math.cos(th),wy:rr*Math.sin(th),color:"red"});
-      }
-      // 添加固定颜色的标记点
-      pts.push({ wx: 2, wy: 1, color: "green" });
-      pts.push({ wx: -2, wy: -1.5, color: "green" });
-      pts.push({ wx: 1.5, wy: -2, color: "blue" });
-      pts.push({ wx: -1, wy: 2, color: "gray" });
+      
+      // 添加指定数量的标记点
+      // 2个绿色标记点
+      pts.push({ wx: 1.2, wy: 0.8, color: "green" });
+      pts.push({ wx: -1.5, wy: -1.2, color: "green" });
+      
+      // 1个蓝色标记点
+      pts.push({ wx: 2.0, wy: -1.0, color: "blue" });
+      
+      // 1个灰色标记点
+      pts.push({ wx: -0.8, wy: 1.5, color: "gray" });
+      
+      // 1个红色标记点（作为额外点）
+      pts.push({ wx: 1.0, wy: 1.8, color: "red" });
+      
+      // 1个三角旗标记
+      pts.push({ wx: -1.8, wy: 0.5, color: "flag" });
+      
       state.blips=pts;
     }
 
-    // =============== 绘制：网格、扇形、红点 ===============
+    // =============== 绘制：网格、扇形、标记点 ===============
     function drawGrid(){
       const {x:cx,y:cy}=state.center,R=state.r;
       // 背景微光
@@ -140,7 +249,7 @@
 
       // 裁剪圆
       ctx.save(); ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.clip();
-      // 经纬网格（半透明实线，无虚线）
+      // 经纬网格（半透明实线）
       ctx.strokeStyle='rgba(255,255,255,0.35)';
       ctx.lineWidth=1; // 实线
       ctx.setLineDash([]);
@@ -183,6 +292,8 @@
         const {x,y}=worldToScreen(b.wx,b.wy);
         if(!insideCircle(x,y)) continue;
         const r=4+pulse*2;
+        
+        // 脉冲效果
         ctx.beginPath();
         ctx.fillStyle=`rgba(255,255,255,${0.12+0.18*pulse})`;
         ctx.arc(x,y,r*2.4,0,Math.PI*2);
@@ -194,10 +305,27 @@
         if(b.color==="blue")  c="#3399ff";
         if(b.color==="gray")  c="#aaaaaa";
 
-        ctx.beginPath();
-        ctx.fillStyle=c;
-        ctx.arc(x,y,r,0,Math.PI*2);
-        ctx.fill();
+        // 绘制标记点
+        if(b.color === "flag") {
+          // 绘制三角旗
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(-state.headingRad); // 保持旗帜方向正确
+          ctx.fillStyle = "#ffcc00";
+          ctx.beginPath();
+          ctx.moveTo(0, -r);
+          ctx.lineTo(r*1.5, 0);
+          ctx.lineTo(0, r);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        } else {
+          // 绘制圆形标记
+          ctx.beginPath();
+          ctx.fillStyle = c;
+          ctx.arc(x, y, r, 0, Math.PI*2);
+          ctx.fill();
+        }
       }
     }
 
@@ -212,36 +340,32 @@
     document.getElementById('btn-left').addEventListener('click',()=>{ state.gridStep=Math.min(160,state.gridStep+BUTTON_STEP); });
     document.getElementById('btn-right').addEventListener('click',()=>{ state.gridStep=Math.max(8,state.gridStep-BUTTON_STEP); });
 
-    // 鼠标滚轮平滑缩放：使用乘法因子，随滚动速度线性映射到指数缩放
+    // 鼠标滚轮平滑缩放
     canvas.addEventListener('wheel', (e)=>{
       e.preventDefault();
-      const sensitivity = 0.0015; // 越大缩放越灵敏
+      const sensitivity = 0.0015;
       const factor = Math.exp(-e.deltaY * sensitivity);
       state.gridStep = Math.max(8, Math.min(160, state.gridStep * factor));
     }, { passive: false });
 
     // =============== 页面切换（按住确认） ===============
     const radarPage=document.getElementById('radarPage');
-    const compassPage=document.getElementById('compassPage');
+    const infoPage=document.getElementById('infoPage');
     const btnConfirm=document.getElementById('btn-confirm');
 
-    function showCompass(){ radarPage.classList.add('hidden'); compassPage.classList.remove('hidden'); }
-    function showRadar(){ compassPage.classList.add('hidden'); radarPage.classList.remove('hidden'); }
+    function showInfo(){ radarPage.classList.add('hidden'); infoPage.classList.remove('hidden'); }
+    function showRadar(){ infoPage.classList.add('hidden'); radarPage.classList.remove('hidden'); }
 
-    btnConfirm.addEventListener('pointerdown', (e)=>{ try{ btnConfirm.setPointerCapture(e.pointerId); }catch(_){} showCompass(); });
+    btnConfirm.addEventListener('pointerdown', (e)=>{ try{ btnConfirm.setPointerCapture(e.pointerId); }catch(_){} showInfo(); });
     btnConfirm.addEventListener('pointerup',   ()=>{ showRadar(); });
     btnConfirm.addEventListener('pointercancel', ()=>{ showRadar(); });
     btnConfirm.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); });
 
-    // =============== 方向/地磁传感器（同时驱动指南针和雷达世界→设备旋转） ===============
-    const needle=document.getElementById('needle');
-    const headingTxt=document.getElementById('headingTxt');
+    // =============== 方向/地磁传感器 ===============
     const requestPermBtn=document.getElementById('requestPerm');
 
     function updateHeading(deg){
-      if (needle) needle.style.transform=`translateX(-50%) rotate(${deg}deg)`;
-      if (headingTxt) headingTxt.textContent=`朝向：${deg.toFixed(0)}°`;
-      state.headingRad = deg * Math.PI / 180; // 存成弧度给雷达用
+      state.headingRad = deg * Math.PI / 180;
     }
 
     async function requestPermissionIfNeeded(){
@@ -249,17 +373,16 @@
       if (DOE && typeof DOE.requestPermission === 'function') {
         try { const res = await DOE.requestPermission(); return res === 'granted'; } catch(_) { return false; }
       }
-      return true; // Android/桌面
+      return true;
     }
 
     function onDeviceOrientation(e){
-      let heading; // 0=N，顺时针
+      let heading;
       if (typeof e.webkitCompassHeading === 'number') heading = e.webkitCompassHeading;
-      else if (typeof e.alpha === 'number') heading = 360 - e.alpha; // 近似
+      else if (typeof e.alpha === 'number') heading = 360 - e.alpha;
       if (typeof heading === 'number' && isFinite(heading)) { heading=(heading%360+360)%360; updateHeading(heading); }
     }
 
-    // 授权按钮在雷达页
     requestPermBtn.addEventListener('click', async ()=>{
       const ok = await requestPermissionIfNeeded();
       if (ok) {
@@ -273,7 +396,7 @@
     });
 
     // =============== 初始化 ===============
-    function init(){ fitCanvas(); randomBlips(3); if(state.animId) cancelAnimationFrame(state.animId); render(); }
+    function init(){ fitCanvas(); randomBlips(); if(state.animId) cancelAnimationFrame(state.animId); render(); }
     window.addEventListener('resize', fitCanvas);
     window.addEventListener('orientationchange', ()=> setTimeout(fitCanvas, 200));
     document.addEventListener('contextmenu', e=> e.preventDefault());
@@ -281,3 +404,4 @@
   </script>
 </body>
 </html>
+    

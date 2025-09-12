@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>电子求签</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#8B4513',
+                        secondary: '#D2B48C',
+                        accent: '#CD853F',
+                        light: '#F5DEB3',
+                        dark: '#5D2906'
+                    },
+                    fontFamily: {
+                        sans: ['Noto Sans SC', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .stick-shadow {
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            }
+            .shake-animation {
+                animation: shake 0.5s ease-in-out infinite;
+            }
+            .float-animation {
+                animation: float 3s ease-in-out infinite;
+            }
+            .fall-animation {
+                animation: fall 1s ease-out forwards;
+            }
+            @keyframes shake {
+                0%, 100% { transform: rotate(-5deg); }
+                50% { transform: rotate(5deg); }
+            }
+            @keyframes float {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-10px); }
+            }
+            @keyframes fall {
+                0% { transform: translateY(-100px) rotate(0deg); opacity: 0; }
+                60% { transform: translateY(20px) rotate(10deg); opacity: 1; }
+                100% { transform: translateY(0) rotate(0deg); opacity: 1; }
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-light to-secondary min-h-screen flex flex-col items-center justify-center p-4 font-sans">
+    <!-- 标题区域 -->
+    <header class="text-center mb-8">
+        <h1 class="text-[clamp(2rem,5vw,3rem)] font-bold text-dark mb-2">电子求签</h1>
+        <p class="text-dark/80 text-lg">心诚则灵，摇出您的运势</p>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="flex flex-col items-center justify-center w-full max-w-md">
+        <!-- 签筒区域 -->
+        <div id="container" class="relative w-48 h-64 bg-primary rounded-t-3xl rounded-b-xl mb-10 overflow-hidden border-4 border-dark shadow-lg">
+            <div id="sticks-container" class="w-full h-full flex items-center justify-center p-4">
+                <!-- 签子会通过JS动态生成 -->
+                <div id="stick-placeholder" class="text-light/50 text-center">
+                    <i class="fa fa-hand-paper-o text-4xl mb-2"></i>
+                    <p>摇晃手机求签</p>
+                </div>
+                <div id="selected-stick" class="hidden absolute w-16 h-48 bg-light rounded-md stick-shadow text-primary font-bold text-center pt-2"></div>
+            </div>
+            <!-- 签筒装饰 -->
+            <div class="absolute top-0 left-0 w-full h-4 bg-accent border-b-2 border-dark"></div>
+            <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-32 h-1 bg-dark/30 rounded-full"></div>
+        </div>
+
+        <!-- 状态提示 -->
+        <div id="status" class="text-dark text-center mb-6 h-8">
+            <p>请摇晃您的手机开始求签</p>
+        </div>
+
+        <!-- 按钮区域 -->
+        <div class="flex gap-4">
+            <button id="reset-btn" class="hidden bg-dark text-light px-6 py-3 rounded-full font-medium hover:bg-dark/80 transition-all flex items-center">
+                <i class="fa fa-refresh mr-2"></i> 再求一签
+            </button>
+            <button id="interpret-btn" class="hidden bg-accent text-light px-6 py-3 rounded-full font-medium hover:bg-accent/80 transition-all flex items-center">
+                <i class="fa fa-book mr-2"></i> 解读签文
+            </button>
+        </div>
+    </main>
+
+    <!-- 签文解读模态框 -->
+    <div id="interpret-modal" class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-light rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto shadow-2xl border-2 border-primary">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-dark">签文解读</h2>
+                <button id="close-modal" class="text-dark hover:text-accent transition-colors">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="border-t border-primary/30 pt-4">
+                <div class="flex justify-between mb-4">
+                    <div>
+                        <span class="text-sm text-dark/70">签号</span>
+                        <p id="modal-number" class="text-xl font-bold text-dark"></p>
+                    </div>
+                    <div>
+                        <span class="text-sm text-dark/70">签型</span>
+                        <p id="modal-type" class="text-xl font-bold"></p>
+                    </div>
+                </div>
+                <div class="bg-white/50 p-4 rounded-lg border border-primary/20">
+                    <p id="modal-interpretation" class="text-dark leading-relaxed"></p>
+                </div>
+            </div>
+            <div class="mt-6 text-center text-sm text-dark/60">
+                <p>解签仅供参考，人生祸福全在自身把握</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 音效元素 -->
+    <audio id="shake-sound" preload="auto">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-shaking-a-container-full-of-small-objects-2017.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="drop-sound" preload="auto">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-wooden-toy-hit-1932.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="open-sound" preload="auto">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-book-opening-1333.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        // 签文数据
+        const fortuneSticks = [
+            // 上上签 (12支)
+            { number: 1, type: "上上签", interpretation: "时来运转，百事顺遂。近日可得贵人相助，事业财运双丰收，把握良机即可大展宏图。" },
+            { number: 2, type: "上上签", interpretation: "金榜题名，喜报频传。学业事业皆有突破，此前付出终将收获丰厚回报，名利双收。" },
+            { number: 3, type: "上上签", interpretation: "花开富贵，姻缘美满。感情进展顺利，单身者有望遇到良缘，已婚者家庭和睦幸福。" },
+            { number: 4, type: "上上签", interpretation: "财源广进，八方来财。正财偏财皆得意，投资经营需谨慎，但总体收获颇丰。" },
+            { number: 5, type: "上上签", interpretation: "家宅平安，福运绵长。家人健康和睦，灾祸远离，可安居乐业，享受天伦之乐。" },
+            { number: 6, type: "上上签", interpretation: "贵人扶持，步步高升。工作中得上级赏识，同事相助，晋升机会就在眼前，切勿错过。" },
+            { number: 7, type: "上上签", interpretation: "病体康复，身心康泰。疾病困扰即将消散，注意调养作息，健康将伴随左右。" },
+            { number: 8, type: "上上签", interpretation: "远行顺利，收获满满。外出经商或旅行皆如意，不仅平安顺利，还能满载而归。" },
+            { number: 9, type: "上上签", interpretation: "失物复得，转机出现。此前丢失之物有望找回，困境中出现新转机，耐心等待即可。" },
+            { number: 10, type: "上上签", interpretation: "添丁进口，喜气洋洋。家中将有喜事临门，或添新成员，或有其他喜庆之事发生。" },
+            { number: 11, type: "上上签", interpretation: "谋事可成，心想事成。计划之事进展顺利，只要坚持努力，终将达成目标，如愿以偿。" },
+            { number: 12, type: "上上签", interpretation: "福禄双全，吉庆有余。近期运势极佳，无论何事皆能顺心如意，好运常伴左右。" },
+            
+            // 上签 (18支) - 13-30
+            ...Array.from({length: 18}, (_, i) => ({
+                number: 13 + i,
+                type: "上签",
+                interpretation: "运势向好，稳步前进。虽无大惊喜，但诸事平稳，循序渐进即可收获成果，忌急躁。"
+            })),
+            
+            // 中签 (40支) - 31-70
+            ...Array.from({length: 40}, (_, i) => ({
+                number: 31 + i,
+                type: "中签",
+                interpretation: "时好时坏，平常心待。运势有起伏，顺境时勿骄傲，逆境时勿气馁，坚守本心则安。"
+            })),
+            
+            // 下签 (27支) - 71-97
+            ...Array.from({length: 27}, (_, i) => ({
+                number: 71 + i,
+                type: "下签",
+                interpretation: "稍遇波折，谨慎行事。近期可能遇到小麻烦，需冷静应对，低调行事可避祸消灾。"
+            })),
+            
+            // 下下签 (3支)
+            { number: 98, type: "下下签", interpretation: "时运不济，多生变故。凡事多阻碍，宜静不宜动，保守行事，等待时机好转再做打算。" },
+            { number: 99, type: "下下签", interpretation: "破财消灾，小心为上。可能有财物损失，或遇小人作祟，凡事多加小心，平安为要。" },
+            { number: 100, type: "下下签", interpretation: "疾病缠身，家宅不宁。需注意身体健康，家人关系也易生矛盾，宜忍让包容，及时化解。" }
+        ];
+
+        // DOM元素
+        const container = document.getElementById('container');
+        const sticksContainer = document.getElementById('sticks-container');
+        const stickPlaceholder = document.getElementById('stick-placeholder');
+        const selectedStick = document.getElementById('selected-stick');
+        const status = document.querySelector('#status p');
+        const resetBtn = document.getElementById('reset-btn');
+        const interpretBtn = document.getElementById('interpret-btn');
+        const interpretModal = document.getElementById('interpret-modal');
+        const closeModal = document.getElementById('close-modal');
+        const modalNumber = document.getElementById('modal-number');
+        const modalType = document.getElementById('modal-type');
+        const modalInterpretation = document.getElementById('modal-interpretation');
+        
+        // 音效元素
+        const shakeSound = document.getElementById('shake-sound');
+        const dropSound = document.getElementById('drop-sound');
+        const openSound = document.getElementById('open-sound');
+
+        // 变量
+        let isShaking = false;
+        let shakeCount = 0;
+        let shakeThreshold = 15; // 摇晃阈值
+        let requiredShakes = 20; // 需要的摇晃次数
+        let selectedFortune = null;
+
+        // 初始化
+        function init() {
+            // 检查设备是否支持加速度传感器
+            if (window.DeviceMotionEvent) {
+                window.addEventListener('devicemotion', handleMotion, false);
+            } else {
+                status.textContent = "您的设备不支持加速度传感器";
+            }
+
+            // 事件监听
+            resetBtn.addEventListener('click', resetFortune);
+            interpretBtn.addEventListener('click', showInterpretation);
+            closeModal.addEventListener('click', hideInterpretation);
+            
+            // 点击模态框背景关闭
+            interpretModal.addEventListener('click', (e) => {
+                if (e.target === interpretModal) {
+                    hideInterpretation();
+                }
+            });
+        }
+
+        // 处理加速度传感器数据
+        function handleMotion(event) {
+            if (selectedFortune) return; // 如果已经摇出签，不再响应
+            
+            const acceleration = event.accelerationIncludingGravity;
+            
+            // 计算加速度的绝对值总和
+            const sum = Math.abs(acceleration.x) + Math.abs(acceleration.y) + Math.abs(acceleration.z);
+            
+            // 检测摇晃
+            if (sum > shakeThreshold) {
+                if (!isShaking) {
+                    startShaking();
+                }
+                
+                shakeCount++;
+                updateShakeProgress();
+                
+                // 摇晃次数足够，生成签
+                if (shakeCount >= requiredShakes) {
+                    endShaking();
+                    generateFortune();
+                }
+            }
+        }
+
+        // 开始摇晃
+        function startShaking() {
+            isShaking = true;
+            container.classList.add('shake-animation');
+            stickPlaceholder.innerHTML = '<i class="fa fa-spinner fa-spin text-4xl mb-2"></i><p>摇晃中...</p>';
+            shakeSound.loop = true;
+            shakeSound.play().catch(e => console.log("无法播放音效:", e));
+        }
+
+        // 结束摇晃
+        function endShaking() {
+            isShaking = false;
+            container.classList.remove('shake-animation');
+            shakeSound.loop = false;
+            shakeSound.pause();
+        }
+
+        // 更新摇晃进度
+        function updateShakeProgress() {
+            const progress = Math.min(Math.round((shakeCount / requiredShakes) * 100), 100);
+            status.textContent = `摇晃进度: ${progress}%`;
+        }
+
+        // 生成随机签
+        function generateFortune() {
+            // 随机选择一支签
+            const randomIndex = Math.floor(Math.random() * fortuneSticks.length);
+            selectedFortune = fortuneSticks[randomIndex];
+            
+            // 显示选中的签
+            stickPlaceholder.classList.add('hidden');
+            selectedStick.classList.remove('hidden');
+            selectedStick.classList.add('fall-animation');
+            selectedStick.textContent = selectedFortune.number;
+            
+            // 播放掉落音效
+            dropSound.play().catch(e => console.log("无法播放音效:", e));
+            
+            // 更新状态和按钮
+            status.textContent = `获得第 ${selectedFortune.number} 签`;
+            resetBtn.classList.remove('hidden');
+            interpretBtn.classList.remove('hidden');
+        }
+
+        // 重置求签
+        function resetFortune() {
+            selectedFortune = null;
+            shakeCount = 0;
+            selectedStick.classList.add('hidden');
+            selectedStick.classList.remove('fall-animation');
+            stickPlaceholder.classList.remove('hidden');
+            stickPlaceholder.innerHTML = '<i class="fa fa-hand-paper-o text-4xl mb-2"></i><p>摇晃手机求签</p>';
+            status.textContent = "请摇晃您的手机开始求签";
+            resetBtn.classList.add('hidden');
+            interpretBtn.classList.add('hidden');
+            hideInterpretation();
+        }
+
+        // 显示签文解读
+        function showInterpretation() {
+            if (!selectedFortune) return;
+            
+            modalNumber.textContent = selectedFortune.number;
+            modalType.textContent = selectedFortune.type;
+            
+            // 根据签型设置颜色
+            switch(selectedFortune.type) {
+                case "上上签":
+                    modalType.className = "text-xl font-bold text-green-600";
+                    break;
+                case "上签":
+                    modalType.className = "text-xl font-bold text-blue-600";
+                    break;
+                case "中签":
+                    modalType.className = "text-xl font-bold text-yellow-600";
+                    break;
+                case "下签":
+                    modalType.className = "text-xl font-bold text-orange-600";
+                    break;
+                case "下下签":
+                    modalType.className = "text-xl font-bold text-red-600";
+                    break;
+            }
+            
+            modalInterpretation.textContent = selectedFortune.interpretation;
+            interpretModal.classList.remove('hidden');
+            
+            // 播放打开音效
+            openSound.play().catch(e => console.log("无法播放音效:", e));
+        }
+
+        // 隐藏签文解读
+        function hideInterpretation() {
+            interpretModal.classList.add('hidden');
+        }
+
+        // 页面加载完成后初始化
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
