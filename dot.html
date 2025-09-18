@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>暗色调像素编辑器</title>
+    <!-- 引入Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- 引入Supabase JS客户端 -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- 配置Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        pixel: {
+                            bg: '#1a1a2e',
+                            dark: '#16213e',
+                            darker: '#0f3460',
+                            grid: '#3a4768',
+                            border: '#4a5568',
+                            selected: '#64d2ff'
+                        }
+                    },
+                    fontFamily: {
+                        pixel: ['"Press Start 2P"', 'monospace', 'system-ui']
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- 自定义工具类 -->
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .pixel-border {
+                @apply border border-pixel-border;
+            }
+            .pixel-hover {
+                @apply transition-colors duration-100 hover:bg-gray-700/50;
+            }
+            .color-swatch {
+                @apply w-8 h-8 cursor-pointer transition-transform duration-100 hover:scale-110 pixel-border;
+            }
+            .color-swatch-selected {
+                @apply ring-2 ring-pixel-selected ring-offset-2 ring-offset-pixel-dark;
+            }
+            .pixel-grid-line {
+                @apply border border-pixel-grid;
+            }
+            .wave-animation {
+                background: linear-gradient(90deg, rgba(60,80,120,0.1) 50%, rgba(60,80,120,0.05) 50%);
+                background-size: 20px 20px;
+                animation: wave 10s linear infinite;
+            }
+            @keyframes wave {
+                0% { background-position: 0 0; }
+                100% { background-position: 200px 0; }
+            }
+        }
+    </style>
+    
+    <!-- 额外样式 -->
+    <style>
+        /* 像素风格字体 */
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        
+        /* 网格容器样式 */
+        .grid-container {
+            display: grid;
+            background-color: #16213e;
+            overflow: auto;
+            image-rendering: pixelated;
+            touch-action: manipulation;
+            transition: grid-template-columns 0.3s ease;
+        }
+        
+        /* 像素格子样式 */
+        .pixel {
+            user-select: none;
+            -webkit-user-select: none;
+            transition: background-color 0.1s;
+            box-sizing: border-box;
+        }
+        
+        /* 表格样式 */
+        .history-table {
+            font-size: 0.8rem;
+        }
+        
+        /* 滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #1a1a2e;
+            border: 1px solid #4a5568;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #4a5568;
+            border: 1px solid #3a4768;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        
+        /* 颜色选择弹窗 */
+        .modal-backdrop {
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+    </style>
+</head>
+<body class="bg-pixel-bg text-gray-200 min-h-screen font-sans">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- 标题区域 -->
+        <header class="mb-8 text-center">
+            <h1 class="text-4xl font-pixel text-gray-100 mb-2 tracking-tight">像素编辑器</h1>
+            <p class="text-gray-400">点击像素格子，选择颜色，创作你的像素艺术！</p>
+        </header>
+        
+        <!-- 主内容区域 -->
+        <main class="flex flex-col lg:flex-row gap-6">
+            <!-- 左侧编辑器区域 -->
+            <div class="w-full lg:w-2/3">
+                <!-- 缩放控制 -->
+                <div class="bg-pixel-dark rounded-lg p-3 mb-4 shadow-md flex justify-between items-center">
+                    <div class="text-sm text-gray-300">画布控制</div>
+                    <div class="flex gap-2">
+                        <button id="zoomOutBtn" class="bg-pixel-darker hover:bg-pixel-darker/80 text-white py-1 px-3 rounded transition-colors duration-200">
+                            <i class="fa fa-minus"></i>
+                        </button>
+                        <span id="zoomLevel" class="text-gray-300 px-2">100%</span>
+                        <button id="zoomInBtn" class="bg-pixel-darker hover:bg-pixel-darker/80 text-white py-1 px-3 rounded transition-colors duration-200">
+                            <i class="fa fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 网格容器 -->
+                <div class="pixel-border bg-pixel-dark rounded-lg p-2 mb-4 shadow-md">
+                    <div id="pixelGrid" class="grid-container w-full h-[400px] rounded"></div>
+                </div>
+            </div>
+            
+            <!-- 右侧历史记录区域 -->
+            <div class="w-full lg:w-1/3">
+                <div class="bg-pixel-dark rounded-lg p-4 shadow-md h-full flex flex-col">
+                    <h2 class="text-lg font-bold mb-3 text-gray-300">修改历史</h2>
+                    
+                    <!-- 控制按钮 -->
+                    <div class="flex gap-2 mb-4">
+                        <button id="saveBtn" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded transition-colors duration-200 flex items-center justify-center">
+                            <i class="fa fa-save mr-2"></i> 保存所有更改
+                        </button>
+                        <button id="clearBtn" class="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded transition-colors duration-200 flex items-center justify-center">
+                            <i class="fa fa-trash mr-2"></i> 清空
+                        </button>
+                    </div>
+                    
+                    <!-- 历史记录表格 -->
+                    <div class="overflow-auto flex-1">
+                        <table class="history-table w-full border-collapse">
+                            <thead>
+                                <tr class="bg-pixel-darker/50">
+                                    <th class="px-2 py-2 border border-pixel-border text-left text-gray-300">坐标</th>
+                                    <th class="px-2 py-2 border border-pixel-border text-left text-gray-300">颜色</th>
+                                    <th class="px-2 py-2 border border-pixel-border text-left text-gray-300">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody">
+                                <!-- 历史记录将通过JS动态生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Supabase状态 -->
+                    <div class="mt-4 pt-4 border-t border-pixel-border">
+                        <div id="supabaseStatus" class="text-sm text-gray-400 flex items-center">
+                            <i class="fa fa-circle-o-notch fa-spin mr-2"></i>
+                            <span>连接到Supabase...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <!-- 页脚 -->
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+            <p>像素编辑器 &copy; 2023 | 使用Tailwind CSS和Supabase构建</p>
+        </footer>
+    </div>
+    
+    <!-- 颜色选择弹窗 -->
+    <div id="colorModal" class="fixed inset-0 flex items-center justify-center z-50 hidden">
+        <div class="modal-backdrop absolute inset-0 bg-black/70"></div>
+        <div class="bg-pixel-dark rounded-lg shadow-2xl p-6 w-full max-w-md relative z-10">
+            <h3 class="text-xl font-bold mb-4 text-gray-200">选择颜色</h3>
+            <p class="text-gray-400 mb-4">为坐标 <span id="modalPixelCoord" class="text-pixel-selected font-bold">(x, y)</span> 选择颜色</p>
+            
+            <div id="modalColorPalette" class="flex flex-wrap gap-2 mb-6">
+                <!-- 颜色将通过JS动态生成 -->
+            </div>
+            
+            <div class="flex gap-3">
+                <button id="cancelColorBtn" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded transition-colors duration-200">
+                    取消
+                </button>
+                <button id="confirmColorBtn" class="flex-1 bg-pixel-selected hover:bg-pixel-selected/80 text-white py-2 px-4 rounded transition-colors duration-200">
+                    确认
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- JavaScript -->
+    <script>
+        // 16种颜色定义 (适配暗色调)
+        const colors = [
+            '#000000', '#ffffff', '#ff5252', '#4caf50',
+            '#2196f3', '#9c27b0', '#ff9800', '#e91e63',
+            '#8bc34a', '#03a9f4', '#673ab7', '#ffeb3b',
+            '#795548', '#9e9e9e', '#3f51b5', '#f5f5f5'
+        ];
+        
+        // 全局变量
+        let selectedColor = '#000000';
+        let activePixel = null; // 当前选中的像素坐标
+        let pixelChanges = [];
+        let gridColumns = 30; // 默认横向30个格子
+        let gridRows = Math.floor((window.innerHeight * 0.6) / (window.innerWidth / gridColumns));
+        let pixelSize = window.innerWidth / gridColumns;
+        let supabase;
+        let supabaseConnected = false;
+        
+        // DOM元素
+        const pixelGrid = document.getElementById('pixelGrid');
+        const colorModal = document.getElementById('colorModal');
+        const modalColorPalette = document.getElementById('modalColorPalette');
+        const modalPixelCoord = document.getElementById('modalPixelCoord');
+        const confirmColorBtn = document.getElementById('confirmColorBtn');
+        const cancelColorBtn = document.getElementById('cancelColorBtn');
+        const historyTableBody = document.getElementById('historyTableBody');
+        const saveBtn = document.getElementById('saveBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const supabaseStatus = document.getElementById('supabaseStatus');
+        const zoomInBtn = document.getElementById('zoomInBtn');
+        const zoomOutBtn = document.getElementById('zoomOutBtn');
+        const zoomLevel = document.getElementById('zoomLevel');
+        
+        // 初始化Supabase
+        function initSupabase() {
+            // 注意：在实际应用中，应该使用环境变量存储这些信息
+            const supabaseUrl = 'https://your-project-url.supabase.co';
+            const supabaseKey = 'your-anon-key';
+            
+            if (!supabaseUrl || !supabaseKey) {
+                updateSupabaseStatus('请配置您的Supabase URL和密钥', 'error');
+                return;
+            }
+            
+            supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+            
+            // 测试连接
+            supabase.from('pixels').select('count', { count: 'exact', head: true })
+                .then(response => {
+                    if (response.error) {
+                        throw response.error;
+                    }
+                    supabaseConnected = true;
+                    updateSupabaseStatus('已连接到Supabase', 'success');
+                    
+                    // 加载已保存的像素数据
+                    loadSavedPixels();
+                })
+                .catch(error => {
+                    console.error('Supabase连接错误:', error);
+                    updateSupabaseStatus(`连接错误: ${error.message}`, 'error');
+                });
+        }
+        
+        // 更新Supabase状态显示
+        function updateSupabaseStatus(message, status) {
+            let icon, colorClass;
+            
+            switch(status) {
+                case 'success':
+                    icon = '<i class="fa fa-check-circle mr-2 text-green-500"></i>';
+                    colorClass = 'text-green-400';
+                    break;
+                case 'error':
+                    icon = '<i class="fa fa-exclamation-circle mr-2 text-red-500"></i>';
+                    colorClass = 'text-red-400';
+                    break;
+                case 'loading':
+                    icon = '<i class="fa fa-circle-o-notch fa-spin mr-2"></i>';
+                    colorClass = 'text-blue-400';
+                    break;
+                default:
+                    icon = '<i class="fa fa-info-circle mr-2 text-gray-500"></i>';
+                    colorClass = 'text-gray-400';
+            }
+            
+            supabaseStatus.innerHTML = `${icon}<span class="${colorClass}">${message}</span>`;
+        }
+        
+        // 创建像素网格
+        function createPixelGrid() {
+            // 清空现有内容
+            pixelGrid.innerHTML = '';
+            
+            // 设置网格列数
+            pixelGrid.style.gridTemplateColumns = `repeat(${gridColumns}, ${pixelSize}px)`;
+            zoomLevel.textContent = `${Math.round(gridColumns / 30 * 100)}%`;
+            
+            // 计算合适的行数
+            const containerHeight = pixelGrid.clientHeight;
+            gridRows = Math.floor(containerHeight / pixelSize) + 1;
+            
+            // 创建网格像素
+            for (let y = 0; y < gridRows; y++) {
+                for (let x = 0; x < gridColumns; x++) {
+                    const pixel = document.createElement('div');
+                    pixel.className = 'pixel pixel-grid-line';
+                    pixel.style.width = `${pixelSize}px`;
+                    pixel.style.height = `${pixelSize}px`;
+                    pixel.dataset.x = x;
+                    pixel.dataset.y = y;
+                    pixel.dataset.id = `${x},${y}`;
+                    
+                    // 添加波浪动画到未上色的像素
+                    pixel.classList.add('wave-animation');
+                    
+                    // 添加事件监听器
+                    pixel.addEventListener('click', () => openColorModal(x, y));
+                    
+                    pixelGrid.appendChild(pixel);
+                }
+            }
+        }
+        
+        // 创建颜色选择器（弹窗中）
+        function createModalColorPalette() {
+            modalColorPalette.innerHTML = '';
+            
+            colors.forEach(color => {
+                const swatch = document.createElement('div');
+                swatch.className = `color-swatch ${color === selectedColor ? 'color-swatch-selected' : ''}`;
+                swatch.style.backgroundColor = color;
+                swatch.title = color;
+                swatch.dataset.color = color;
+                
+                swatch.addEventListener('click', () => {
+                    selectedColor = color;
+                    // 更新选中状态
+                    document.querySelectorAll('#modalColorPalette .color-swatch').forEach(s => {
+                        s.classList.remove('color-swatch-selected');
+                    });
+                    swatch.classList.add('color-swatch-selected');
+                });
+                
+                modalColorPalette.appendChild(swatch);
+            });
+        }
+        
+        // 打开颜色选择弹窗
+        function openColorModal(x, y) {
+            activePixel = { x, y, id: `${x},${y}` };
+            modalPixelCoord.textContent = `(${x}, ${y})`;
+            
+            // 检查该像素是否已有颜色，如果有则选中对应颜色
+            const existingChange = pixelChanges.find(change => change.id === activePixel.id);
+            if (existingChange) {
+                selectedColor = existingChange.color;
+            } else {
+                selectedColor = '#000000'; // 默认颜色
+            }
+            
+            // 更新弹窗中的颜色选择器
+            createModalColorPalette();
+            
+            // 显示弹窗
+            colorModal.classList.remove('hidden');
+        }
+        
+        // 关闭颜色选择弹窗
+        function closeColorModal() {
+            colorModal.classList.add('hidden');
+            activePixel = null;
+        }
+        
+        // 确认颜色选择
+        function confirmColorSelection() {
+            if (!activePixel) return;
+            
+            const { x, y, id } = activePixel;
+            const pixel = document.querySelector(`.pixel[data-id="${id}"]`);
+            
+            if (pixel) {
+                // 应用颜色并移除波浪动画
+                pixel.style.backgroundColor = selectedColor;
+                pixel.classList.remove('wave-animation');
+                
+                // 检查是否已有该像素的记录
+                const existingIndex = pixelChanges.findIndex(change => change.id === id);
+                
+                if (existingIndex >= 0) {
+                    // 更新现有记录
+                    pixelChanges[existingIndex].color = selectedColor;
+                } else {
+                    // 添加新记录
+                    pixelChanges.push({
+                        id: id,
+                        x: x,
+                        y: y,
+                        color: selectedColor,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+                
+                // 更新历史表格
+                updateHistoryTable();
+            }
+            
+            closeColorModal();
+        }
+        
+        // 缩放画布
+        function zoomCanvas(zoomIn) {
+            // 限制缩放范围
+            if (zoomIn && gridColumns >= 120) return; // 最大400%
+            if (!zoomIn && gridColumns <= 15) return; // 最小50%
+            
+            // 调整列数（每次增减15列）
+            gridColumns = zoomIn ? gridColumns + 15 : gridColumns - 15;
+            
+            // 重新计算像素大小
+            pixelSize = pixelGrid.clientWidth / gridColumns;
+            
+            // 重新创建网格
+            createPixelGrid();
+            
+            // 重新应用已保存的颜色
+            applySavedColors();
+        }
+        
+        // 应用已保存的颜色
+        function applySavedColors() {
+            pixelChanges.forEach(change => {
+                const pixel = document.querySelector(`.pixel[data-id="${change.id}"]`);
+                if (pixel) {
+                    pixel.style.backgroundColor = change.color;
+                    pixel.classList.remove('wave-animation');
+                }
+            });
+        }
+        
+        // 更新历史表格
+        function updateHistoryTable() {
+            historyTableBody.innerHTML = '';
+            
+            // 倒序显示，最新的在前面
+            [...pixelChanges].reverse().forEach((change, index) => {
+                const row = document.createElement('tr');
+                row.className = index % 2 === 0 ? 'bg-pixel-darker/30' : 'bg-pixel-darker/10';
+                
+                row.innerHTML = `
+                    <td class="px-2 py-2 border border-pixel-border text-gray-300">(${change.x}, ${change.y})</td>
+                    <td class="px-2 py-2 border border-pixel-border text-gray-300">
+                        <div class="flex items-center">
+                            <div class="w-4 h-4 mr-2 border border-gray-600" style="background-color: ${change.color}"></div>
+                            <span class="text-xs">${change.color}</span>
+                        </div>
+                    </td>
+                    <td class="px-2 py-2 border border-pixel-border text-gray-300">
+                        <button class="delete-btn text-red-400 hover:text-red-300 text-sm" data-id="${change.id}">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </td>
+                `;
+                
+                historyTableBody.appendChild(row);
+            });
+            
+            // 添加删除事件监听
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.currentTarget.dataset.id;
+                    deleteChange(id);
+                });
+            });
+            
+            // 更新按钮状态
+            saveBtn.disabled = pixelChanges.length === 0;
+            clearBtn.disabled = pixelChanges.length === 0;
+            
+            if (pixelChanges.length === 0) {
+                const emptyRow = document.createElement('tr');
+                emptyRow.innerHTML = `
+                    <td colspan="3" class="px-2 py-4 border border-pixel-border text-center text-gray-500">
+                        暂无修改记录
+                    </td>
+                `;
+                historyTableBody.appendChild(emptyRow);
+            }
+        }
+        
+        // 删除单个更改记录
+        function deleteChange(id) {
+            // 找到像素并重置
+            const pixel = document.querySelector(`.pixel[data-id="${id}"]`);
+            if (pixel) {
+                pixel.style.backgroundColor = '';
+                pixel.classList.add('wave-animation');
+            }
+            
+            // 从数组中移除
+            pixelChanges = pixelChanges.filter(change => change.id !== id);
+            
+            // 更新表格
+            updateHistoryTable();
+        }
+        
+        // 保存所有更改到Supabase
+        function saveChanges() {
+            if (!supabaseConnected || pixelChanges.length === 0) return;
+            
+            updateSupabaseStatus('正在保存更改...', 'loading');
+            
+            // 准备要保存的数据
+            const dataToSave = pixelChanges.map(change => ({
+                id: change.id,
+                x: change.x,
+                y: change.y,
+                color: change.color,
+                updated_at: new Date().toISOString()
+            }));
+            
+            // 使用upsert保存数据（存在则更新，不存在则插入）
+            supabase
+                .from('pixels')
+                .upsert(dataToSave)
+                .then(response => {
+                    if (response.error) {
+                        throw response.error;
+                    }
+                    
+                    updateSupabaseStatus(`已成功保存 ${pixelChanges.length} 项更改`, 'success');
+                    
+                    // 清空更改列表
+                    pixelChanges = [];
+                    updateHistoryTable();
+                })
+                .catch(error => {
+                    console.error('保存错误:', error);
+                    updateSupabaseStatus(`保存失败: ${error.message}`, 'error');
+                });
+        }
+        
+        // 从Supabase加载已保存的像素
+        function loadSavedPixels() {
+            if (!supabaseConnected) return;
+            
+            updateSupabaseStatus('正在加载像素数据...', 'loading');
+            
+            supabase
+                .from('pixels')
+                .select('*')
+                .then(response => {
+                    if (response.error) {
+                        throw response.error;
+                    }
+                    
+                    const savedPixels = response.data;
+                    
+                    if (savedPixels && savedPixels.length > 0) {
+                        // 保存像素数据
+                        pixelChanges = savedPixels;
+                        
+                        // 应用保存的颜色
+                        applySavedColors();
+                        
+                        // 更新历史表格
+                        updateHistoryTable();
+                        
+                        updateSupabaseStatus(`已加载 ${savedPixels.length} 个像素数据`, 'success');
+                    } else {
+                        updateSupabaseStatus('没有找到保存的像素数据', 'success');
+                    }
+                })
+                .catch(error => {
+                    console.error('加载错误:', error);
+                    updateSupabaseStatus(`加载失败: ${error.message}`, 'error');
+                });
+        }
+        
+        // 清空所有更改
+        function clearAllChanges() {
+            if (confirm('确定要清空所有更改吗？这将重置所有像素并清除历史记录。')) {
+                // 重置所有像素
+                document.querySelectorAll('.pixel').forEach(pixel => {
+                    const id = pixel.dataset.id;
+                    if (pixelChanges.some(change => change.id === id)) {
+                        pixel.style.backgroundColor = '';
+                        pixel.classList.add('wave-animation');
+                    }
+                });
+                
+                // 清空更改列表
+                pixelChanges = [];
+                updateHistoryTable();
+            }
+        }
+        
+        // 初始化事件监听器
+        function initEventListeners() {
+            // 缩放按钮
+            zoomInBtn.addEventListener('click', () => zoomCanvas(true));
+            zoomOutBtn.addEventListener('click', () => zoomCanvas(false));
+            
+            // 颜色选择弹窗
+            confirmColorBtn.addEventListener('click', confirmColorSelection);
+            cancelColorBtn.addEventListener('click', closeColorModal);
+            
+            // 点击弹窗背景关闭弹窗
+            colorModal.addEventListener('click', (e) => {
+                if (e.target === colorModal) {
+                    closeColorModal();
+                }
+            });
+            
+            // 保存和清空按钮
+            saveBtn.addEventListener('click', saveChanges);
+            clearBtn.addEventListener('click', clearAllChanges);
+            
+            // 初始禁用按钮
+            saveBtn.disabled = true;
+            clearBtn.disabled = true;
+            
+            // 窗口大小变化时重新计算网格
+            window.addEventListener('resize', () => {
+                pixelSize = pixelGrid.clientWidth / gridColumns;
+                createPixelGrid();
+                applySavedColors();
+            });
+        }
+        
+        // 初始化应用
+        function initApp() {
+            createPixelGrid();
+            createModalColorPalette();
+            initEventListeners();
+            initSupabase();
+        }
+        
+        // 当DOM加载完成后初始化应用
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>
+    

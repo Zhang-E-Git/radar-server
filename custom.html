@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>后台配置页面 - 点位编辑</title>
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <style>
+    :root{ 
+        --bg:#f8fafc; 
+        --card:#ffffff; 
+        --muted:#64748b; 
+        --accent:#3b82f6; 
+        --panel:#f1f5f9;
+        --border:#e2e8f0;
+        --text:#1e293b;
+    }
+    *{box-sizing:border-box}
+    body{
+        font-family:system-ui,-apple-system,Segoe UI,Roboto,'PingFang SC',"Microsoft Yahei";
+        background:var(--bg);
+        color:var(--text);
+        padding:28px;
+        margin:0;
+    }
+
+    .container{
+        max-width:1200px;
+        margin:0 auto;
+        background:var(--card);
+        border-radius:12px;
+        padding:18px;
+        box-shadow:0 2px 10px rgba(0,0,0,0.05);
+    }
+    h1{
+        font-size:20px;
+        margin:6px 0 18px;
+        color:var(--accent);
+    }
+
+    .table-head, .row{
+        display:grid;
+        grid-template-columns:44px 1fr 320px 320px 120px;
+        gap:12px;
+        align-items:center;
+        padding:10px;
+    }
+    .table-head{
+        font-size:13px;
+        color:var(--muted);
+        border-bottom:1px solid var(--border);
+    }
+    .row{
+        background:var(--panel);
+        margin-top:12px;
+        padding:12px;
+        border-radius:8px;
+        transition:box-shadow 0.2s ease;
+    }
+    .row:hover{
+        box-shadow:0 2px 8px rgba(0,0,0,0.04);
+    }
+    .index{
+        font-weight:700;
+        text-align:center;
+        color:var(--muted);
+    }
+
+    input[type=text], textarea, select, .mirror{
+        background:var(--card);
+        border:1px solid var(--border);
+        color:inherit;
+        padding:8px;
+        border-radius:6px;
+        outline:none;
+        width:100%;
+    }
+    textarea {
+        resize: none;
+        overflow: hidden;
+        min-height: 36px;
+        line-height: 1.4;
+    }
+    input[type=text]:focus, textarea:focus, select:focus{
+        border-color:var(--accent);
+        box-shadow:0 0 0 2px rgba(59,130,246,0.1);
+    }
+    .btn{
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        padding:8px 12px;
+        border-radius:8px;
+        background:var(--panel);
+        border:1px solid var(--border);
+        cursor:pointer;
+        color:var(--text);
+        transition:all 0.2s ease;
+    }
+    .btn:hover{
+        background:#e2e8f0;
+    }
+    .btn.primary{
+        background:var(--accent);
+        color:white;
+        border-color:var(--accent);
+    }
+    .btn.primary:hover{
+        background:#2563eb;
+    }
+    .btn.danger{
+        background:#ef4444;
+        color:white;
+        border-color:#ef4444;
+    }
+    .btn.danger:hover{
+        background:#dc2626;
+    }
+
+    .small{
+        font-size:13px;
+        padding:6px 8px;
+    }
+    .actions{
+        display:flex;
+        gap:8px;
+    }
+
+    .modal{
+        position:fixed;
+        left:0;
+        top:0;
+        right:0;
+        bottom:0;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background:rgba(0,0,0,0.1);
+        z-index:50;
+        backdrop-filter:blur(2px);
+    }
+    .modal-card{
+        width:90%;
+        max-width:1000px;
+        height:70vh;
+        background:var(--card);
+        border-radius:10px;
+        padding:12px;
+        display:flex;
+        flex-direction:column;
+        box-shadow:0 10px 25px rgba(0,0,0,0.08);
+    }
+    .modal-header{
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        margin-bottom:8px;
+        padding-bottom:8px;
+        border-bottom:1px solid var(--border);
+    }
+    #map{
+        flex:1;
+        border-radius:8px;
+        border:1px solid var(--border);
+    }
+
+    .ghost{
+        visibility:hidden;
+        position:absolute;
+        white-space:pre-wrap;
+        word-wrap: break-word;
+        padding:8px;
+        font-family: inherit;
+        font-size: inherit;
+        line-height: 1.4;
+    }
+
+    footer{
+        margin-top:16px;
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+    }
+
+    /* 新增电子围栏样式 */
+    .fence-section{
+        margin-top:32px;
+        padding:18px;
+        background:var(--card);
+        border-radius:12px;
+        box-shadow:0 2px 10px rgba(0,0,0,0.05);
+    }
+    .fence-maps{
+        display:flex;
+        gap:16px;
+    }
+    .fence-map{
+        flex:1;
+        display:flex;
+        flex-direction:column;
+    }
+    .fence-map-title{
+        font-weight:600;
+        font-size:14px;
+        margin-bottom:6px;
+    }
+    .fence-map-box{
+        flex:1;
+        border:1px solid var(--border);
+        border-radius:8px;
+        min-height:320px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>点位后台配置（示例页面）</h1>
+    <div class="table-head">
+      <div>#</div>
+      <div>点位名称</div>
+      <div>位置（点击地图抓取经纬）</div>
+      <div>交互形式 & 动态内容</div>
+      <div>操作</div>
+    </div>
+
+    <div id="rows"></div>
+
+    <footer>
+      <div style="display:flex;gap:8px">
+        <button class="btn primary" id="addRowBtn">＋ 添加行</button>
+        <button class="btn small" id="exportBtn">导出JSON</button>
+      </div>
+      <div style="color:var(--muted);font-size:13px">地图使用 Leaflet + OpenStreetMap 免费地图。</div>
+    </footer>
+  </div>
+
+  <!-- 新增电子围栏区域 -->
+  <div class="fence-section">
+    <h1>电子围栏</h1>
+    <div style="margin-bottom:8px">
+      <button class="btn small" id="modeMaxBtn">添加最大范围点</button>
+      <button class="btn small" id="modeWarnBtn">添加警示区域点</button>
+      <button class="btn small" id="addWarnZoneBtn">增加一个新的警示区</button>
+    </div>
+    <div class="fence-map">
+      <div class="fence-map-title">最大范围(蓝) / 警示区域(红)</div>
+      <div id="fenceMapCombined" class="fence-map-box"></div>
+    </div>
+    <div style="margin-top:12px">
+      <h3>最大范围</h3>
+      <table id="fenceMaxTable" border="1" style="width:100%;border-collapse:collapse">
+        <thead><tr><th>纬度</th><th>经度</th><th>操作</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px">
+      <h3>警示区域</h3>
+      <div id="warnZonesContainer"></div>
+    </div>
+    <div style="margin-top:12px">
+      <button class="btn primary" id="saveFenceBtn">保存电子围栏</button>
+      <button class="btn small" id="exportFenceBtn">导出JSON</button>
+    </div>
+  </div>
+
+  <!-- Map Modal -->
+  <div id="mapModal" class="modal" style="display:none">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div style="font-weight:700">地图选择（点击地图放置标记）</div>
+        <div class="map-controls">
+          <button class="btn small" id="saveLocationBtn">保存</button>
+          <button class="btn" id="closeMapBtn">关闭</button>
+        </div>
+      </div>
+      <div id="map"></div>
+    </div>
+  </div>
+
+  <!-- QA Modal -->
+  <div id="qaModal" class="modal" style="display:none">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div style="font-weight:700">编辑问答</div>
+        <button class="btn" id="closeQaBtn">关闭</button>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:8px;padding:8px">
+        <textarea id="qaQuestion" placeholder="请输入题目" rows="2"></textarea>
+        <div>
+          <textarea class="qaOption" placeholder="选项1" rows="1"></textarea>
+          <label><input type="checkbox" class="qaCorrect" />正确</label>
+        </div>
+        <div>
+          <textarea class="qaOption" placeholder="选项2" rows="1"></textarea>
+          <label><input type="checkbox" class="qaCorrect" />正确</label>
+        </div>
+        <div>
+          <textarea class="qaOption" placeholder="选项3" rows="1"></textarea>
+          <label><input type="checkbox" class="qaCorrect" />正确</label>
+        </div>
+        <button class="btn primary" id="saveQaBtn">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ghostContainer" style="position:fixed;left:-9999px;top:-9999px;opacity:0">
+    <span id="inputMirror" class="ghost"></span>
+  </div>
+
+  <script>
+    let rowsData = [];
+    let editingRowId = null; 
+    let map, mapMarker;
+
+    // 电子围栏数据
+    let fenceData = { maxRange: [], warningZones: [[]] };
+    let fenceMap;
+    let fenceMaxPolyline;
+    let fenceWarnPolylines = [];
+    let fenceMarkers = []; // {marker, type, idx, zoneIdx}
+    let fenceMode = 'max'; // 'max' or 'warn'
+
+    function createRowObject(){
+      return {
+        id: Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+        name: '',
+        location: {lat:'', lng:'', address:''},
+        type: '讲解',
+        extra: { images: [], audios: [], text:'', question:'', options:[
+            {text:'选项1',correct:false},
+            {text:'选项2',correct:false},
+            {text:'选项3',correct:true}
+        ]}
+      }
+    }
+
+    const rowsEl = document.getElementById('rows');
+
+    function renderRows(){
+      rowsEl.innerHTML = '';
+      rowsData.forEach((r, idx)=>{
+        const row = document.createElement('div'); row.className='row'; row.dataset.id=r.id;
+        row.innerHTML = `
+          <div class="index">${idx+1}</div>
+          <div><textarea class="nameInput" placeholder="输入点位名称" rows="1">${escapeHtml(r.name)}</textarea></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <div style="flex:1"><input type="text" class="locInput" readonly placeholder="未选择地点" value="${escapeHtml(r.location.address||'')}" /></div>
+            <div style="white-space:nowrap"><button class="btn small mapBtn">选择地点</button></div>
+          </div>
+          <div>
+            <select class="typeSelect">
+              <option value="讲解" ${r.type==='讲解'?'selected':''}>讲解</option>
+              <option value="问答" ${r.type==='问答'?'selected':''}>问答</option>
+              <option value="线下互动" ${r.type==='线下互动'?'selected':''}>线下互动</option>
+            </select>
+            <div class="dynamicArea" style="margin-top:10px"></div>
+          </div>
+          <div class="actions">
+            <button class="btn small deleteBtn">删除</button>
+          </div>
+        `;
+        rowsEl.appendChild(row);
+
+        const nameInput = row.querySelector('.nameInput');
+        const locInput = row.querySelector('.locInput');
+        const mapBtn = row.querySelector('.mapBtn');
+        const typeSelect = row.querySelector('.typeSelect');
+        const dynamicArea = row.querySelector('.dynamicArea');
+        const deleteBtn = row.querySelector('.deleteBtn');
+
+        wireAutoHeight(nameInput); 
+        nameInput.addEventListener('input', ()=>{ r.name=nameInput.value; wireAutoHeight(nameInput); });
+
+        mapBtn.addEventListener('click', ()=>{ openMapModal(r.id); });
+        locInput.value = r.location.address || '';
+
+        typeSelect.addEventListener('change', ()=>{ r.type=typeSelect.value; renderDynamicArea(dynamicArea,r); });
+        renderDynamicArea(dynamicArea,r);
+
+        deleteBtn.addEventListener('click', ()=>{
+          if(confirm('确定删除此行吗？')){
+            rowsData = rowsData.filter(x=>x.id!==r.id);
+            renderRows();
+          }
+        });
+      });
+    }
+
+    function renderDynamicArea(container,rowObj){
+      container.innerHTML='';
+      if(rowObj.type==='讲解'){
+        const div=document.createElement('div');
+        div.innerHTML=`
+          <div class="file-controls">
+            <label class="btn small">上传图片<input type="file" accept="image/*" style="display:none" class="imgUpload"></label>
+            <label class="btn small">上传语音<input type="file" accept="audio/*" style="display:none" class="audioUpload"></label>
+          </div>
+          <div style="margin-top:8px"><textarea class="explainText" placeholder="请输入讲解文本（可选）" rows="2">${escapeHtml(rowObj.extra.text||'')}</textarea></div>
+        `;
+        container.appendChild(div);
+        div.querySelector('.imgUpload').addEventListener('change', e=>{ const f=e.target.files[0]; if(f) rowObj.extra.images.push({name:f.name,size:f.size}); alert('已接收图片'); });
+        div.querySelector('.audioUpload').addEventListener('change', e=>{ const f=e.target.files[0]; if(f) rowObj.extra.audios.push({name:f.name,size:f.size}); alert('已接收音频'); });
+        const explainText = div.querySelector('.explainText'); wireAutoHeight(explainText);
+        explainText.addEventListener('input', ()=>{ rowObj.extra.text=explainText.value; wireAutoHeight(explainText); });
+
+      } else if(rowObj.type==='问答'){
+        const div=document.createElement('div');
+        div.innerHTML=`
+          <button class="btn small editQABtn">编辑问答</button>
+          <div style="margin-top:8px;color:var(--muted);font-size:13px">问题：${escapeHtml(rowObj.extra.question||'未设置')} | 选项：${rowObj.extra.options.length}</div>
+        `;
+        container.appendChild(div);
+        div.querySelector('.editQABtn').addEventListener('click', ()=>{ openQaModal(rowObj); });
+
+      } else if(rowObj.type==='线下互动'){
+        const div=document.createElement('div');
+        div.innerHTML=`<div><textarea class="offlineInput" placeholder="线下互动文字描述" rows="2">${escapeHtml(rowObj.extra.text||'')}</textarea></div>`;
+        container.appendChild(div);
+        const offlineInput = div.querySelector('.offlineInput'); wireAutoHeight(offlineInput);
+        offlineInput.addEventListener('input', ()=>{ rowObj.extra.text=offlineInput.value; wireAutoHeight(offlineInput); });
+      }
+    }
+
+    function wireAutoHeight(textareaEl){
+      const mirror=document.getElementById('inputMirror');
+      mirror.style.width = textareaEl.offsetWidth + 'px';
+      function update(){
+        mirror.textContent = textareaEl.value || textareaEl.placeholder || '';
+        const height = Math.min(Math.max(mirror.offsetHeight, 36), 200);
+        textareaEl.style.height = height + 'px';
+      }
+      textareaEl.style.height = 'auto';
+      update();
+      textareaEl.addEventListener('input', update);
+      window.addEventListener('resize', () => {
+        mirror.style.width = textareaEl.offsetWidth + 'px';
+        update();
+      });
+    }
+
+    // 地图功能
+    const mapModal = document.getElementById('mapModal');
+    document.getElementById('closeMapBtn').addEventListener('click', ()=>{ closeMapModal(); });
+    document.getElementById('saveLocationBtn').addEventListener('click', ()=>{
+      if(!editingRowId) return closeMapModal();
+      const r=rowsData.find(x=>x.id===editingRowId);
+      if(!r) return closeMapModal();
+      r.location.lat=mapModal.dataset.lat||'';
+      r.location.lng=mapModal.dataset.lng||'';
+      r.location.address=mapModal.dataset.address||(`经度:${r.location.lng} 纬度:${r.location.lat}`);
+      renderRows(); closeMapModal();
+    });
+
+    function initMapOnce(){
+      if(map) return;
+      map = L.map('map').setView([30.25, 120.16], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+      map.on('click', e=>{
+        const {lat,lng}=e.latlng;
+        if(mapMarker) map.removeLayer(mapMarker);
+        mapMarker=L.marker([lat,lng]).addTo(map);
+        mapModal.dataset.lat=lat;
+        mapModal.dataset.lng=lng;
+        mapModal.dataset.address=`经度:${lng.toFixed(6)} 纬度:${lat.toFixed(6)}`;
+      });
+    }
+
+    function openMapModal(rowId){
+      editingRowId=rowId;
+      mapModal.style.display='flex';
+      initMapOnce();
+      const r=rowsData.find(x=>x.id===rowId);
+      if(r && r.location.lat && r.location.lng){
+        if(mapMarker) map.removeLayer(mapMarker);
+        mapMarker=L.marker([+r.location.lat,+r.location.lng]).addTo(map);
+        map.setView([+r.location.lat,+r.location.lng],15);
+      }
+    }
+
+    function closeMapModal(){
+      mapModal.style.display='none';
+      editingRowId=null;
+      mapModal.dataset.lat=''; mapModal.dataset.lng=''; mapModal.dataset.address='';
+      if(mapMarker){ map.removeLayer(mapMarker); mapMarker=null; }
+    }
+
+    // QA 弹窗
+    const qaModal=document.getElementById('qaModal');
+    function openQaModal(rowObj){
+      qaModal.style.display='flex';
+      document.getElementById('qaQuestion').value=rowObj.extra.question||'';
+      const opts=rowObj.extra.options||[];
+      const optionInputs=qaModal.querySelectorAll('.qaOption');
+      const checkboxes=qaModal.querySelectorAll('.qaCorrect');
+      wireAutoHeight(document.getElementById('qaQuestion'));
+      optionInputs.forEach(input => wireAutoHeight(input));
+      for(let i=0;i<3;i++){
+        optionInputs[i].value=opts[i]?.text||'';
+        checkboxes[i].checked=opts[i]?.correct||false;
+      }
+      document.getElementById('saveQaBtn').onclick=()=>{
+        rowObj.extra.question=document.getElementById('qaQuestion').value;
+        rowObj.extra.options=[];
+        for(let i=0;i<3;i++){
+          rowObj.extra.options.push({ text:optionInputs[i].value, correct:checkboxes[i].checked });
+        }
+        qaModal.style.display='none';
+        renderRows();
+      }
+    }
+    document.getElementById('closeQaBtn').onclick=()=>{ qaModal.style.display='none'; }
+
+    // 公共操作
+    document.getElementById('addRowBtn').addEventListener('click', ()=>{ rowsData.push(createRowObject()); renderRows(); });
+    document.getElementById('exportBtn').addEventListener('click', ()=>{
+      const s=JSON.stringify({points:rowsData,fence:fenceData},null,2);
+      const blob=new Blob([s],{type:'application/json'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='config.json'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    rowsData.push(createRowObject()); renderRows();
+
+    function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    // ===== 电子围栏地图逻辑 =====
+    function refreshFencePolygonsAndMarkers() {
+      // Remove old polylines/polygons
+      if (fenceMaxPolyline) { fenceMap.removeLayer(fenceMaxPolyline); fenceMaxPolyline = null; }
+      fenceWarnPolylines.forEach(poly => fenceMap.removeLayer(poly));
+      fenceWarnPolylines = [];
+      // Remove all markers
+      fenceMarkers.forEach(obj => fenceMap.removeLayer(obj.marker));
+      fenceMarkers = [];
+      // Draw maxRange as a polygon if at least 3 points
+      if (fenceData.maxRange.length >= 3) {
+        const poly = L.polygon(fenceData.maxRange, {color:'blue', weight:3, opacity:0.8, fillOpacity:0.2}).addTo(fenceMap);
+        fenceWarnPolylines.push(poly);
+      }
+      // Draw warning zones as polygons if at least 3 points
+      if (Array.isArray(fenceData.warningZones)) {
+        fenceData.warningZones.forEach((zone, zoneIdx) => {
+          if (zone.length >= 3) {
+            const poly = L.polygon(zone, {color:'red', weight:3, opacity:0.8, fillOpacity:0.2}).addTo(fenceMap);
+            fenceWarnPolylines.push(poly);
+          }
+        });
+      }
+      // Add markers for all points
+      fenceData.maxRange.forEach(([lat, lng], idx) => {
+        const m = L.circleMarker([lat, lng], {radius:7, color:'blue', fillColor:'#3b82f6', fillOpacity:0.7}).addTo(fenceMap);
+        fenceMarkers.push({marker:m, type:'max', idx});
+      });
+      if (Array.isArray(fenceData.warningZones)) {
+        fenceData.warningZones.forEach((zone, zoneIdx) => {
+          zone.forEach(([lat, lng], idx) => {
+            const m = L.circleMarker([lat, lng], {radius:7, color:'red', fillColor:'#ef4444', fillOpacity:0.7}).addTo(fenceMap);
+            fenceMarkers.push({marker:m, type:'warn', idx, zoneIdx});
+          });
+        });
+      }
+    }
+
+    function refreshFencePointsTable() {
+      // Max range table
+      const maxTbody = document.querySelector('#fenceMaxTable tbody');
+      maxTbody.innerHTML = '';
+      fenceData.maxRange.forEach(([lat, lng], idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${lat.toFixed(6)}</td><td>${lng.toFixed(6)}</td>
+          <td><button class="btn small danger" data-type="max" data-idx="${idx}">删除</button></td>`;
+        // Add row click to highlight
+        tr.onclick = ()=>highlightFencePoint('max', null, idx);
+        maxTbody.appendChild(tr);
+      });
+      maxTbody.querySelectorAll('button[data-type="max"]').forEach(btn => {
+        btn.onclick = function(e) {
+          e.stopPropagation();
+          const idx = +btn.dataset.idx;
+          fenceData.maxRange.splice(idx,1);
+          refreshFencePolygonsAndMarkers();
+          refreshFencePointsTable();
+        }
+      });
+      // Warning zones tables
+      const warnZonesDiv = document.getElementById('warnZonesContainer');
+      warnZonesDiv.innerHTML = '';
+      if (Array.isArray(fenceData.warningZones)) {
+        fenceData.warningZones.forEach((zone, zoneIdx) => {
+          const div = document.createElement('div');
+          div.style.marginBottom = '16px';
+          div.innerHTML = `<h4 style="margin-bottom:4px">警示区域${zoneIdx+1}
+             <button class="btn small danger" data-delzone="${zoneIdx}">删除该警示区</button>
+             </h4>
+            <table border="1" style="width:100%;border-collapse:collapse">
+              <thead><tr><th>纬度</th><th>经度</th><th>操作</th></tr></thead>
+              <tbody></tbody>
+            </table>`;
+          const tbody = div.querySelector('tbody');
+          zone.forEach(([lat, lng], idx) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${lat.toFixed(6)}</td><td>${lng.toFixed(6)}</td>
+              <td><button class="btn small danger" data-type="warn" data-zone="${zoneIdx}" data-idx="${idx}">删除</button></td>`;
+            // Add row click to highlight
+            tr.onclick = ()=>highlightFencePoint('warn', zoneIdx, idx);
+            tbody.appendChild(tr);
+          });
+          tbody.querySelectorAll('button[data-type="warn"]').forEach(btn => {
+            btn.onclick = function(e) {
+              e.stopPropagation();
+              const zoneIdx = +btn.dataset.zone;
+              const idx = +btn.dataset.idx;
+              if (Array.isArray(fenceData.warningZones[zoneIdx])) {
+                fenceData.warningZones[zoneIdx].splice(idx,1);
+                refreshFencePolygonsAndMarkers();
+                refreshFencePointsTable();
+              }
+            }
+          });
+          warnZonesDiv.appendChild(div);
+          // Add event listener to 删除该警示区按钮
+          const delZoneBtn = div.querySelector('button[data-delzone]');
+          if (delZoneBtn) {
+            delZoneBtn.addEventListener('click', function(e) {
+              e.stopPropagation();
+              const zoneIdx = +delZoneBtn.dataset.delzone;
+              if (Array.isArray(fenceData.warningZones) && fenceData.warningZones.length > zoneIdx) {
+                fenceData.warningZones.splice(zoneIdx, 1);
+                refreshFencePointsTable();
+                refreshFencePolygonsAndMarkers();
+              }
+            });
+          }
+        });
+      }
+    }
+    // ===== 电子围栏高亮点 =====
+    function highlightFencePoint(type, zoneIdx, idx) {
+      fenceMarkers.forEach(obj => {
+        if(obj.type===type && (type==='max'? obj.idx===idx : (obj.idx===idx && obj.zoneIdx===zoneIdx))) {
+          obj.marker.setStyle({radius:10, color:'#f59e0b'});
+          setTimeout(()=>{ obj.marker.setStyle({radius:7, color: type==='max'?'blue':'red'}); },1500);
+          fenceMap.setView(obj.marker.getLatLng(), fenceMap.getZoom());
+        }
+      });
+    }
+
+    function setFenceMode(mode) {
+      fenceMode = mode;
+      document.getElementById('modeMaxBtn').classList.toggle('primary', mode==='max');
+      document.getElementById('modeWarnBtn').classList.toggle('primary', mode==='warn');
+    }
+
+    function initFenceMap() {
+      if(fenceMap) return;
+      fenceMap = L.map('fenceMapCombined').setView([30.25,120.16],12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ attribution:'&copy; OpenStreetMap contributors'}).addTo(fenceMap);
+      fenceMap.on('click', e => {
+        const {lat, lng} = e.latlng;
+        if(fenceMode === 'max') {
+          fenceData.maxRange.push([lat, lng]);
+          if(fenceData.maxRange.length > 99) fenceData.maxRange.shift();
+        } else {
+          // Always push into the last warning zone array
+          if (!Array.isArray(fenceData.warningZones) || fenceData.warningZones.length === 0) {
+            fenceData.warningZones = [[]];
+          }
+          let lastZone = fenceData.warningZones[fenceData.warningZones.length-1];
+          if (!Array.isArray(lastZone)) {
+            fenceData.warningZones[fenceData.warningZones.length-1] = [];
+            lastZone = fenceData.warningZones[fenceData.warningZones.length-1];
+          }
+          lastZone.push([lat, lng]);
+          if(lastZone.length > 99) lastZone.shift();
+        }
+        refreshFencePolygonsAndMarkers();
+        refreshFencePointsTable();
+      });
+      setFenceMode('max');
+      refreshFencePolygonsAndMarkers();
+      refreshFencePointsTable();
+    }
+
+    // Wire mode buttons
+    document.getElementById('modeMaxBtn').onclick = ()=>setFenceMode('max');
+    document.getElementById('modeWarnBtn').onclick = ()=>setFenceMode('warn');
+    document.getElementById('addWarnZoneBtn').onclick = () => {
+      if (!Array.isArray(fenceData.warningZones)) fenceData.warningZones = [];
+      fenceData.warningZones.push([]);
+      refreshFencePointsTable();
+      refreshFencePolygonsAndMarkers();
+    };
+
+    // Init map on DOMContentLoaded
+    window.addEventListener('DOMContentLoaded', ()=>{
+      setTimeout(initFenceMap, 0);
+    });
+
+    // Save fence logic
+    document.getElementById('saveFenceBtn').onclick=()=>{
+      const maxOk = fenceData.maxRange.length >= 4;
+      let warnOk = false;
+      if (Array.isArray(fenceData.warningZones)) {
+        warnOk = fenceData.warningZones.some(zone => Array.isArray(zone) && zone.length >= 4);
+      }
+      if(!maxOk || !warnOk){
+        alert('最大范围和至少一个警示区域都需要至少4个坐标点');
+        return;
+      }
+      alert('电子围栏已保存！');
+    };
+
+    // Fence 导出JSON按钮
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('exportFenceBtn').onclick = () => {
+        const dataToExport = {
+          maxRange: fenceData.maxRange,
+          warningZones: fenceData.warningZones
+        };
+        const s = JSON.stringify(dataToExport, null, 2);
+        const blob = new Blob([s], {type:'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'fence.json';
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+    });
+  </script>
+</body>
+</html>
