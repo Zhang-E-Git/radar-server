@@ -138,8 +138,9 @@
         align-items:center;
         justify-content:center;
         background:rgba(0,0,0,0.1);
-        z-index:50;
+        z-index:99999; /* 提升 z-index，确保 modal 在 Leaflet 之上 */
         backdrop-filter:blur(2px);
+        pointer-events:auto;
     }
     .modal-card{
         width:90%;
@@ -151,14 +152,7 @@
         display:flex;
         flex-direction:column;
         box-shadow:0 10px 25px rgba(0,0,0,0.08);
-    }
-    .modal-header{
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-        margin-bottom:8px;
-        padding-bottom:8px;
-        border-bottom:1px solid var(--border);
+        z-index:100000; /* 确保卡片也在最前面 */
     }
     #map{
         flex:1;
@@ -476,6 +470,10 @@
         if(mapMarker) map.removeLayer(mapMarker);
         mapMarker=L.marker([+r.location.lat,+r.location.lng]).addTo(map);
         map.setView([+r.location.lat,+r.location.lng],15);
+      }
+      // 当 modal 从 display:none 变为可见后，强制刷新 Leaflet 尺寸，避免被下层地图遮挡或渲染异常
+      if (map) {
+        setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} }, 100);
       }
     }
 

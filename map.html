@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>游玩路线配置</title>
+  <!-- 引入Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 引入Font Awesome -->
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <!-- 百度地图API -->
+  <script type="text/javascript" src="https://api.map.baidu.com/api?v=3.0&ak=YqnA3NZ93MwEeukMTpweBXY6OU4pKu3L"></script>
+
+  <!-- 配置Tailwind -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#2E7DFF',
+            secondary: '#4CAF50',
+            neutral: '#F5F7FA',
+            dark: '#1D2129',
+          },
+          fontFamily: {
+            inter: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .map-container {
+        height: calc(100vh - 64px);
+      }
+      .card-shadow {
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
+      }
+      .transition-all-300 {
+        transition: all 300ms ease-in-out;
+      }
+      .point-item {
+        transition: all 0.3s ease;
+      }
+      .point-item:hover {
+        transform: translateX(4px);
+      }
+      .point-item.active {
+        border-color: #2E7DFF;
+        background-color: rgba(46, 125, 255, 0.05);
+      }
+      .marker-highlight {
+        animation: pulse 1.5s infinite;
+        border-radius: 50%;
+      }
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(46, 125, 255, 0.4);
+        }
+        70% {
+          box-shadow: 0 0 0 10px rgba(46, 125, 255, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(46, 125, 255, 0);
+        }
+      }
+      /* 自定义标记样式 */
+      .custom-marker {
+        background-color: #2E7DFF;
+        color: white;
+        border-radius: 50%;
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        border: 2px solid white;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        font-size: 18px;
+      }
+      .custom-marker-active {
+        background-color: #FF5722;
+        transform: scale(1.1);
+      }
+    }
+  </style>
+</head>
+<body class="font-inter bg-neutral text-dark overflow-hidden">
+  <!-- 顶部导航栏 -->
+  <header class="bg-white shadow-md px-4 md:px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center space-x-2">
+      <i class="fa fa-map-marker text-primary text-2xl"></i>
+      <h1 class="text-xl md:text-2xl font-bold text-primary">游玩路线配置</h1>
+    </div>
+    <div class="text-sm text-gray-500 hidden md:block">
+      点击地图添加点位，填写点位对应信息，导出数据表保存。
+    </div>
+  </header>
+
+  <!-- 主内容区 -->
+  <main class="flex flex-col md:flex-row h-[calc(100vh-64px)]">
+    <!-- 地图容器 -->
+    <div id="map" class="map-container w-full md:w-3/4 z-10"></div>
+    
+    <!-- 信息面板 -->
+    <div class="bg-white w-full md:w-1/4 p-4 md:p-6 overflow-y-auto card-shadow z-20 flex flex-col">
+      <div class="mb-6">
+        <h2 class="text-lg font-semibold mb-2 flex items-center">
+          <i class="fa fa-info-circle text-primary mr-2"></i>使用说明
+        </h2>
+        <p class="text-sm text-gray-600 leading-relaxed">
+          在地图上找到需要标记的位置点击鼠标左键，即可标记该点位的坐标，并填写点位名称说明和选择类型，介绍文字或者答题选项。全部编辑完成后可导出数据表。
+        </p>
+        
+        <!-- 景区名称和线路分支输入框 -->
+        <div class="mt-4 space-y-3">
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">景区名称</label>
+            <input id="scenic-name" type="text" placeholder="请输入景区名称" 
+                  class="w-full p-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">线路分支</label>
+            <input id="route-branch" type="text" placeholder="请输入线路分支" 
+                  class="w-full p-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" />
+          </div>
+        </div>
+      </div>
+      
+      <div class="border-t border-gray-100 pt-4 flex-1">
+        <h2 class="text-lg font-semibold mb-4 flex items-center">
+          <i class="fa fa-list-alt text-secondary mr-2"></i>点位列表
+          <span id="point-count" class="ml-2 text-sm bg-primary/10 text-primary px-2 py-0.5 rounded-full">0 个点位</span>
+        </h2>
+        
+        <!-- 点位列表容器 -->
+        <div id="points-list" class="space-y-4">
+          <!-- 点位项将动态添加到这里 -->
+          <div class="text-center text-gray-400 text-sm py-8">
+            点击地图添加点位...
+          </div>
+        </div>
+      </div>
+      
+      <!-- 导出按钮 -->
+      <div class="mt-6 pt-4 border-t border-gray-100 space-y-2">
+        <!-- 导入按钮（位于导出按钮上方） -->
+        <div class="flex gap-2">
+          <button id="import-btn" class="flex-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 py-2 px-3 rounded-lg transition-all-300 flex items-center justify-center">
+            <i class="fa fa-upload mr-2"></i>导入配置表
+          </button>
+          <!-- 隐藏的文件输入控件 -->
+          <input id="import-json" type="file" accept="application/json,.json" style="display:none" />
+        </div>
+
+        <button id="export-points" class="w-full bg-primary hover:bg-primary/90 text-white py-2 px-4 rounded-lg transition-all-300 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+          <i class="fa fa-list mr-2"></i>导出点位列表（仅序号/名称/坐标）
+        </button>
+        <button id="export-full" class="w-full bg-secondary hover:bg-secondary/90 text-white py-2 px-4 rounded-lg transition-all-300 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+          <i class="fa fa-download mr-2"></i>导出完整配置表（包含所有信息）
+        </button>
+      </div>
+      
+      <!-- 复制提示 -->
+      <div id="copy-toast" class="fixed bottom-6 right-6 bg-dark text-white px-4 py-2 rounded-lg shadow-lg opacity-0 transition-all-300 transform translate-y-4">
+        已复制到剪贴板!
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // 初始化地图和变量
+    let map;
+    const markers = []; // 存储所有标记点
+    let pointId = 0; // 点位ID计数器
+    let activePointId = null; // 当前选中的点位ID
+    
+    function initMap() {
+      // 创建地图实例，中心点设为北京
+      map = new BMap.Map("map");
+      const point = new BMap.Point(116.404, 39.915);
+      map.centerAndZoom(point, 15);
+      
+      // 启用地图控件
+      map.enableScrollWheelZoom(true);  // 启用滚轮缩放
+      map.addControl(new BMap.NavigationControl());  // 导航控件
+      map.addControl(new BMap.ScaleControl());  // 比例尺控件
+      map.addControl(new BMap.OverviewMapControl());  // 缩略图控件
+      
+      // 点击地图事件 - 添加新点位
+      map.addEventListener("click", function(e) {
+        addNewPoint(e.point);
+      });
+      
+      // 定位到用户当前位置
+      const geolocation = new BMap.Geolocation();
+      geolocation.getCurrentPosition(function(r) {
+        if (this.getStatus() === BMAP_STATUS_SUCCESS) {
+          map.panTo(r.point);
+        }
+      });
+    }
+    
+    // 添加新点位
+    function addNewPoint(point) {
+      pointId++;
+      const id = `point-${pointId}`;
+      const sequence = markers.length + 1; // 计算点位序号
+      
+      // 创建SVG图标作为自定义标记
+      const svg = `
+        <svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="24" cy="24" r="20" fill="#2E7DFF" stroke="white" stroke-width="2"/>
+          <text x="24" y="30" font-family="Arial" font-size="18" font-weight="bold" text-anchor="middle" fill="white">${sequence}</text>
+        </svg>
+      `;
+      const svgBase64 = btoa(unescape(encodeURIComponent(svg)));
+      const iconUrl = `data:image/svg+xml;base64,${svgBase64}`;
+      
+      // 创建并添加标记
+      const markerSize = new BMap.Size(48, 48);
+      const iconAnchor = new BMap.Size(24, 48); // 图标定位点的偏移值
+      const myIcon = new BMap.Icon(iconUrl, markerSize, {
+        anchor: iconAnchor,
+        imageSize: markerSize
+      });
+      
+        const marker = new BMap.Marker(point, { icon: myIcon });
+        try { marker.setZIndex(1000 + sequence); } catch (e) { /* ignore if API missing */ }
+      marker.pointId = id; // 给标记添加ID属性
+      marker.sequence = sequence; // 存储序号
+      
+      // 点击标记点事件 - 选中该点位
+      marker.addEventListener("click", function(e) {
+        e.stopPropagation(); // 阻止事件冒泡，避免添加新点位
+        selectPoint(id);
+      });
+      
+      map.addOverlay(marker);
+      map.panTo(point);
+      
+      // 不使用信息窗口，交互通过侧边面板完成
+      
+      // 新增字段
+      markers.push({
+        id,
+        marker,
+        sequence,
+        point: { lat: point.lat.toFixed(6), lng: point.lng.toFixed(6) },
+        name: '',
+        description: '',
+        type: '讲解',
+        scoring: false, // 计分
+        score: 0,       // 分值
+        nfc: false,     // NFC
+        qa: { question: '', options: ['', '', ''], correctIndex: null }
+      });
+      
+      // 添加到列表
+      renderPointsList();
+      
+      // 更新计数和导出按钮状态
+      updatePointCount();
+      updateExportButtonState();
+      
+      // 选中新添加的点位
+      selectPoint(id);
+    }
+    
+    // 选中点位
+    function selectPoint(id) {
+      // 更新活动点位ID
+      activePointId = id;
+      
+      // 找到对应的点位数据
+      const idx = markers.findIndex(item => item.id === id);
+      if (idx === -1) return;
+      
+      const pointData = markers[idx];
+      
+      // 1. 地图聚焦到该点位
+      const point = new BMap.Point(
+        parseFloat(pointData.point.lng),
+        parseFloat(pointData.point.lat)
+      );
+      map.panTo(point);
+      
+  // 2. 更新所有标记样式（高亮当前选中的标记）
+      markers.forEach(item => {
+        // 更新选中状态的图标
+        const sequence = item.sequence;
+        const isActive = item.id === id;
+        const fillColor = isActive ? "#FF5722" : "#2E7DFF";
+        const size = isActive ? 52.8 : 48; // 1.1倍缩放
+        
+        // 重新生成SVG图标
+        const svg = `
+          <svg width="${size}" height="${size}" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="24" cy="24" r="20" fill="${fillColor}" stroke="white" stroke-width="2"/>
+            <text x="24" y="30" font-family="Arial" font-size="18" font-weight="bold" text-anchor="middle" fill="white">${sequence}</text>
+          </svg>
+        `;
+        const svgBase64 = btoa(unescape(encodeURIComponent(svg)));
+        const iconUrl = `data:image/svg+xml;base64,${svgBase64}`;
+        
+        const markerSize = new BMap.Size(size, size);
+        const iconAnchor = new BMap.Size(24, 48);
+        const myIcon = new BMap.Icon(iconUrl, markerSize, {
+          anchor: iconAnchor,
+          imageSize: markerSize
+        });
+        
+        item.marker.setIcon(myIcon);
+        
+        // 添加/移除高亮效果
+        const markerDom = item.marker.getDom();
+        if (markerDom) {
+          if (isActive) {
+            markerDom.classList.add('marker-highlight');
+          } else {
+            markerDom.classList.remove('marker-highlight');
+          }
+        }
+      });
+      
+      // 3. 右侧列表聚焦到对应项并把焦点放到第一个可编辑控件
+      renderPointsList();
+      const pointElement = document.getElementById(id);
+      if (pointElement) {
+        pointElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        pointElement.classList.add('bg-primary/10');
+        setTimeout(() => pointElement.classList.remove('bg-primary/10'), 2000);
+
+        // 尝试聚焦第一个可编辑元素（name input 或 textarea 或 select）
+        const focusEl = pointElement.querySelector('input[type="text"], input:not([type]), textarea, select');
+        try { if (focusEl && typeof focusEl.focus === 'function') focusEl.focus(); } catch (e) { /* ignore */ }
+      }
+    }
+    
+    // 重新渲染点位列表
+    function renderPointsList() {
+      const pointsList = document.getElementById('points-list');
+      
+      // 如果没有点位，显示提示文本
+      if (markers.length === 0) {
+        pointsList.innerHTML = `
+          <div class="text-center text-gray-400 text-sm py-8">
+            点击地图添加点位...
+          </div>
+        `;
+        return;
+      }
+      
+      // 清空列表并重新添加所有点位
+      pointsList.innerHTML = '';
+      
+      markers.forEach((item) => {
+        const point = item.point;
+        const seq = item.sequence;
+        const isActive = item.id === activePointId;
+        
+        // 创建点位项
+        const pointItem = document.createElement('div');
+        pointItem.id = item.id;
+        pointItem.className = `point-item bg-neutral rounded-lg p-4 border border-gray-100 ${isActive ? 'active' : ''}`;
+        
+        // 点击列表项选中点位
+        // 点击列表项选中点位
+        pointItem.addEventListener('click', function(e) {
+          if (!e.target.closest('button') && !e.target.closest('input') && !e.target.closest('select') && !e.target.closest('textarea')) {
+            selectPoint(item.id);
+          }
+        });
+        // 鼠标按下时立即给卡片添加选中样式（避免等待编辑才出现）
+        pointItem.addEventListener('mousedown', function(e) {
+          // 立即设为活动并给出可视反馈；selectPoint 会在需要时继续处理聚焦与渲染
+          activePointId = item.id;
+          pointItem.classList.add('active');
+        });
+        
+        // 创建删除按钮并绑定事件
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'text-red-500 hover:text-red-600 transition-all-300';
+        deleteBtn.innerHTML = '<i class="fa fa-trash"></i>';
+        deleteBtn.onclick = function(e) {
+          e.stopPropagation();
+          e.preventDefault();
+          deletePoint(item.id);
+        };
+        
+        // 构建标题区域
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'flex justify-between items-start mb-3';
+        titleDiv.innerHTML = `
+          <div>
+            <h3 class="font-medium text-primary">点位 ${seq}</h3>
+            <input placeholder="点位名称" value="${escapeHtml(item.name || '')}"
+                   class="mt-1 w-full p-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" />
+          </div>
+        `;
+        titleDiv.appendChild(deleteBtn);
+        pointItem.appendChild(titleDiv);
+        
+        // 绑定名称输入框事件
+        const nameInput = titleDiv.querySelector('input');
+        nameInput.addEventListener('input', function() {
+          updateName(item.id, this.value);
+        });
+
+        // 当右侧任一输入获得焦点时，高亮对应左侧标记（仅在当前未选中时触发）
+        // 在 append 之前绑定，下面会将整个 pointItem 插入 DOM
+        const addFocusListeners = () => {
+          const inputs = pointItem.querySelectorAll('input, textarea, select');
+          inputs.forEach(el => {
+            el.addEventListener('focus', function() {
+              if (activePointId !== item.id) selectPoint(item.id);
+            });
+          });
+        };
+        
+        // 添加坐标信息
+        const coordDiv = document.createElement('div');
+        coordDiv.className = 'space-y-2 mb-3 text-sm';
+        coordDiv.innerHTML = `
+          <div><span class="text-gray-500">坐标: </span><span class="font-mono">${point.lat}, ${point.lng}</span></div>
+        `;
+        pointItem.appendChild(coordDiv);
+        
+        // 添加点位说明
+        const descDiv = document.createElement('div');
+        descDiv.className = 'mb-3';
+        descDiv.innerHTML = `
+          <label class="block text-xs text-gray-500 mb-1">点位说明</label>
+          <textarea rows="2" placeholder="请输入点位说明..." class="w-full p-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary">${escapeHtml(item.description || '')}</textarea>
+        `;
+        pointItem.appendChild(descDiv);
+        
+        // 绑定说明文本框事件
+        const descInput = descDiv.querySelector('textarea');
+        descInput.addEventListener('input', function() {
+          updateDescription(item.id, this.value);
+        });
+        
+        // 添加点位类型选择
+        const typeDiv = document.createElement('div');
+        typeDiv.className = 'mb-3';
+        typeDiv.innerHTML = `
+          <label class="block text-xs text-gray-500 mb-1">点位类型</label>
+          <select class="w-full p-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary">
+            <option value="讲解" ${item.type === '讲解' ? 'selected' : ''}>讲解</option>
+            <option value="问答" ${item.type === '问答' ? 'selected' : ''}>问答</option>
+            <option value="线下互动" ${item.type === '线下互动' ? 'selected' : ''}>线下互动</option>
+          </select>
+        `;
+        pointItem.appendChild(typeDiv);
+        
+        // 绑定类型选择事件
+        const typeSelect = typeDiv.querySelector('select');
+        typeSelect.addEventListener('change', function() {
+          updatePointType(item.id, this.value);
+        });
+
+        // 控件区域：计分和分值选择（优化显示逻辑）
+        const controlsDiv = document.createElement('div');
+        controlsDiv.className = 'mb-3 flex items-center gap-4 text-sm';
+
+        // 计分复选框：问答和线下互动都显示
+        if (item.type === '问答' || item.type === '线下互动') {
+          // 为计分复选框和分值选择框添加唯一ID，确保正确关联
+          const scoringId = `scoring-${item.id}`;
+          const scoreDivId = `score-div-${item.id}`;
+          
+          const scoringDiv = document.createElement('div');
+          scoringDiv.innerHTML = `
+            <label class="inline-flex items-center gap-2">
+              <input id="${scoringId}" type="checkbox" ${item.scoring ? 'checked' : ''} />
+              <span class="text-gray-700 text-sm">计分</span>
+            </label>
+          `;
+          controlsDiv.appendChild(scoringDiv);
+          
+          // 分值选择栏：只在勾选计分后显示
+          const scoreDiv = document.createElement('div');
+          scoreDiv.id = scoreDivId;
+          scoreDiv.className = `inline-flex items-center gap-2 ${item.scoring ? '' : 'hidden'}`;
+          
+          let scoreOptions = '';
+          for (let i = 0; i <= 10; i++) {
+            scoreOptions += `<option value="${i}" ${item.score === i ? 'selected' : ''}>${i}分</option>`;
+          }
+          
+          scoreDiv.innerHTML = `
+            <select class="p-1 text-sm border border-gray-200 rounded-md">
+              ${scoreOptions}
+            </select>
+          `;
+          controlsDiv.appendChild(scoreDiv);
+          
+          // 绑定计分复选框事件 - 控制分值选择框显示/隐藏
+          const scoringCheckbox = scoringDiv.querySelector('input');
+          scoringCheckbox.addEventListener('change', function() {
+            const isChecked = this.checked;
+            updateScoring(item.id, isChecked);
+            
+            // 直接控制分值选择框的显示状态
+            const scoreDivElement = document.getElementById(scoreDivId);
+            if (scoreDivElement) {
+              scoreDivElement.className = `inline-flex items-center gap-2 ${isChecked ? '' : 'hidden'}`;
+            }
+          });
+          
+          // 绑定分值选择事件
+          const scoreSelect = scoreDiv.querySelector('select');
+          scoreSelect.addEventListener('change', function() {
+            updateScore(item.id, this.value);
+          });
+        }
+
+        // NFC 子项仅在线下互动显示
+        if (item.type === '线下互动') {
+          const nfcHtml = document.createElement('label');
+          nfcHtml.className = 'inline-flex items-center gap-2';
+          nfcHtml.innerHTML = `
+            <input type="checkbox" ${item.nfc ? 'checked' : ''} />
+            <span class="text-gray-700 text-sm">NFC</span>
+          `;
+          controlsDiv.appendChild(nfcHtml);
+          
+          // 绑定NFC复选框事件
+          const nfcCheckbox = nfcHtml.querySelector('input');
+          nfcCheckbox.addEventListener('change', function() {
+            updateNfc(item.id, this.checked);
+          });
+        }
+
+        if (controlsDiv.childElementCount > 0) {
+          pointItem.appendChild(controlsDiv);
+        }
+
+        // 如果类型为问答，添加问答编辑区域
+        if (item.type === '问答') {
+          const qaDiv = document.createElement('div');
+          qaDiv.className = 'mt-3 p-3 bg-white border border-gray-100 rounded-md';
+          qaDiv.innerHTML = `
+            <label class="block text-xs text-gray-500 mb-1">问答题目</label>
+            <textarea rows="2" placeholder="请输入题目" class="w-full p-2 text-sm border border-gray-200 rounded-md">${escapeHtml(item.qa.question || '')}</textarea>
+
+            <div class="mt-3 space-y-2">
+              <div class="flex items-center gap-2">
+                <span class="w-4 font-semibold">A</span>
+                <input type="text" value="${escapeHtml(item.qa.options[0] || '')}" placeholder="选项 A" class="flex-1 p-2 text-sm border border-gray-200 rounded-md" />
+                <input type="radio" name="correct-${item.id}" ${item.qa.correctIndex === 0 ? 'checked' : ''} />
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-4 font-semibold">B</span>
+                <input type="text" value="${escapeHtml(item.qa.options[1] || '')}" placeholder="选项 B" class="flex-1 p-2 text-sm border border-gray-200 rounded-md" />
+                <input type="radio" name="correct-${item.id}" ${item.qa.correctIndex === 1 ? 'checked' : ''} />
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-4 font-semibold">C</span>
+                <input type="text" value="${escapeHtml(item.qa.options[2] || '')}" placeholder="选项 C" class="flex-1 p-2 text-sm border border-gray-200 rounded-md" />
+                <input type="radio" name="correct-${item.id}" ${item.qa.correctIndex === 2 ? 'checked' : ''} />
+              </div>
+            </div>
+          `;
+          pointItem.appendChild(qaDiv);
+          
+          // 绑定问答相关事件
+          const qaQuestion = qaDiv.querySelector('textarea');
+          qaQuestion.addEventListener('input', function() { updateQuestion(item.id, this.value); });
+
+          const qaOptions = qaDiv.querySelectorAll('input[type="text"]');
+          qaOptions.forEach((input, index) => {
+            input.addEventListener('input', function() { updateQAOption(item.id, index, this.value); });
+            // 焦点也应触发选中
+            input.addEventListener('focus', function() { if (activePointId !== item.id) selectPoint(item.id); });
+          });
+
+          const qaRadios = qaDiv.querySelectorAll('input[type="radio"]');
+          qaRadios.forEach((radio, index) => {
+            radio.addEventListener('change', function() { if (this.checked) setQACorrect(item.id, index); });
+            radio.addEventListener('focus', function() { if (activePointId !== item.id) selectPoint(item.id); });
+          });
+        }
+        // 绑定通用焦点监听后插入 DOM
+        addFocusListeners();
+        pointsList.appendChild(pointItem);
+      });
+    }
+    
+    // 删除点位
+    function deletePoint(id) {
+      const idx = markers.findIndex(item => item.id === id);
+      if (idx !== -1) {
+        // 从地图移除标记
+        map.removeOverlay(markers[idx].marker);
+        // 从数组中移除
+        markers.splice(idx, 1);
+        
+        // 更新剩余点位的序号和标记
+        markers.forEach((item, index) => {
+          const newSeq = index + 1;
+          item.sequence = newSeq;
+          
+          // 更新标记上的序号
+          const fillColor = item.id === activePointId ? "#FF5722" : "#2E7DFF";
+          const size = item.id === activePointId ? 52.8 : 48;
+          
+          const svg = `
+            <svg width="${size}" height="${size}" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="24" cy="24" r="20" fill="${fillColor}" stroke="white" stroke-width="2"/>
+              <text x="24" y="30" font-family="Arial" font-size="18" font-weight="bold" text-anchor="middle" fill="white">${newSeq}</text>
+            </svg>
+          `;
+          const svgBase64 = btoa(unescape(encodeURIComponent(svg)));
+          const iconUrl = `data:image/svg+xml;base64,${svgBase64}`;
+          
+          const markerSize = new BMap.Size(size, size);
+          const iconAnchor = new BMap.Size(24, 48);
+          const myIcon = new BMap.Icon(iconUrl, markerSize, {
+            anchor: iconAnchor,
+            imageSize: markerSize
+          });
+          
+          item.marker.setIcon(myIcon);
+          try { item.marker.setZIndex(item.id === activePointId ? 9999 : (1000 + newSeq)); } catch (e) { /* ignore */ }
+        });
+        
+        // 如果删除的是当前选中的点位，清除选中状态
+        if (id === activePointId) {
+          activePointId = null;
+        }
+      }
+      
+      // 重新渲染列表
+      renderPointsList();
+      // 更新计数和导出按钮状态
+      updatePointCount();
+      updateExportButtonState();
+    }
+    
+    // 以下为各种更新数据的辅助函数
+    function updateDescription(id, value) {
+      const idx = markers.findIndex(item => item.id === id);
+      if (idx !== -1) markers[idx].description = value;
+    }
+    
+    function updatePointType(id, value) {
+      const idx = markers.findIndex(item => item.id === id);
+      if (idx !== -1) {
+        markers[idx].type = value;
+        if (value === '问答' && !markers[idx].qa) {
+          markers[idx].qa = { question: '', options: ['', '', ''], correctIndex: null };
+        }
+        renderPointsList();
+      }
+    }
+
+    function updateName(id, value) {
+      const idx = markers.findIndex(item => item.id === id);
+      if (idx !== -1) markers[idx].name = value;
+      // 在地图标记上显示名称标签（若有名称则显示，名称为空则移除）
+      if (idx !== -1) {
+        const marker = markers[idx].marker;
+        try {
+          if (value && String(value).trim() !== '') {
+            const label = new BMap.Label(String(value), { offset: new BMap.Size(-24, -60) });
+            label.setStyle({
+              color: '#111',
+              background: 'rgba(255,255,255,0.95)',
+              border: '1px solid #e5e7eb',
+              padding: '4px 8px',
+              fontSize: '12px',
+              borderRadius: '6px',
+              whiteSpace: 'nowrap'
+            });
+            marker.setLabel(label);
+          } else {
+            marker.setLabel(null);
+          }
+        } catch (e) { /* ignore label errors */ }
+      }
+    }
+
+    function updateQuestion(id, value) {
+      const idx = markers.findIndex(item => item.id === id);
+      if (idx !== -1) {
+        markers[idx].qa = markers[idx].qa || { question: '', options: ['', '', ''], correctIndex: null };
+        markers[idx].qa.question = value;
+      }
+    }
+
+    function updateQAOption(id, optIdx, value) {
+      const idx = markers.findIndex(item => item.id === id);
+      if (idx !== -1) {
+        markers[idx].qa = markers[idx].qa || { question: '', options: ['', '', ''], correctIndex: null };
+        markers[idx].qa.options[optIdx] = value;
+      }
+    }
+
+    function setQACorrect(id, optIdx) {
+      const idx = markers.findIndex(item => item.id === id);
+      if (idx !== -1) {
+        markers[idx].qa = markers[idx].qa || { question: '', options: ['', '', ''], correctIndex: null };
+        markers[idx].qa.correctIndex = optIdx;
+        renderPointsList();
+      }
+    }
+
+    function updateScoring(id, checked) {
+      const idx = markers.findIndex(item => item.id === id);
+      if (idx !== -1) {
+        markers[idx].scoring = !!checked;
+      }
+    }
+
+    function updateScore(id, value) {
+      const idx = markers.findIndex(item => item.id === id);
+      if (idx !== -1) {
+        markers[idx].score = parseInt(value, 10) || 0;
+      }
+    }
+
+    function updateNfc(id, checked) {
+      const idx = markers.findIndex(item => item.id === id);
+      if (idx !== -1) markers[idx].nfc = !!checked;
+    }
+
+    function updatePointCount() {
+      document.getElementById('point-count').textContent = `${markers.length} 个点位`;
+    }
+    
+    function updateExportButtonState() {
+      const has = markers.length > 0;
+      document.getElementById('export-points').disabled = !has;
+      document.getElementById('export-full').disabled = !has;
+    }
+
+    function getExportFileName(isFull = false) {
+      const scenicName = document.getElementById('scenic-name').value.trim() || '景区';
+      const routeBranch = document.getElementById('route-branch').value.trim() || '线路';
+      const suffix = isFull ? '完整版' : '';
+      return `${scenicName}-${routeBranch}${suffix}-${Date.now()}.json`;
+    }
+
+    // 导出：点位列表（仅序号/名称/坐标）
+    document.getElementById('export-points').addEventListener('click', function() {
+      const arr = markers.map((item) => ({
+        sequence: item.sequence,
+        name: item.name || '',
+        latitude: parseFloat(item.point.lat),
+        longitude: parseFloat(item.point.lng)
+      }));
+      const s = JSON.stringify(arr, null, 2);
+      downloadJSON(s, getExportFileName(false));
+    });
+
+    // 导出：完整配置表（包含所有信息）
+    document.getElementById('export-full').addEventListener('click', function() {
+      const arr = markers.map((item) => ({
+        id: item.id,
+        sequence: item.sequence,
+        name: item.name || '',
+        latitude: parseFloat(item.point.lat),
+        longitude: parseFloat(item.point.lng),
+        description: item.description || '',
+        type: item.type,
+        scoring: !!item.scoring,
+        score: item.score,
+        nfc: !!item.nfc,
+        qa: item.qa || { question: '', options: ['', '', ''], correctIndex: null }
+      }));
+      const s = JSON.stringify({points: arr}, null, 2);
+      downloadJSON(s, getExportFileName(true));
+    });
+
+    function downloadJSON(content, filename) {
+      const blob = new Blob([content], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
+    }
+
+    // ---------- 导入相关函数 ----------
+    // 清除地图上所有点位和内存数组
+    function clearAllMarkers() {
+      if (!map) return;
+      markers.forEach(item => {
+        try { map.removeOverlay(item.marker); } catch (e) { /* ignore */ }
+      });
+      markers.splice(0, markers.length);
+      activePointId = null;
+    }
+
+    // 根据单个点位数据创建标记并加入 markers（不会触发序号重算）
+    function createMarkerFromData(data, sequence) {
+      const lat = parseFloat(data.latitude ?? data.lat ?? (data.point && data.point.lat));
+      const lng = parseFloat(data.longitude ?? data.lng ?? (data.point && data.point.lng));
+      if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+
+      // 生成 SVG 图标（sequence 作为显示文本）
+      const size = 48;
+      const svg = `\n        <svg width="${size}" height="${size}" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">\n          <circle cx="24" cy="24" r="20" fill="#2E7DFF" stroke="white" stroke-width="2"/>\n          <text x="24" y="30" font-family="Arial" font-size="18" font-weight="bold" text-anchor="middle" fill="white">${sequence}</text>\n        </svg>\n      `;
+      const svgBase64 = btoa(unescape(encodeURIComponent(svg)));
+      const iconUrl = `data:image/svg+xml;base64,${svgBase64}`;
+
+      const markerSize = new BMap.Size(size, size);
+      const iconAnchor = new BMap.Size(24, 48);
+      const myIcon = new BMap.Icon(iconUrl, markerSize, { anchor: iconAnchor, imageSize: markerSize });
+
+      const pt = new BMap.Point(lng, lat);
+      const marker = new BMap.Marker(pt, { icon: myIcon });
+      marker.pointId = `imp-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+      marker.sequence = sequence;
+
+      // 点击标记点事件 - 选中该点位
+      marker.addEventListener('click', function(e) {
+        e.stopPropagation();
+        // 查找对应的 markers 项并选中
+        const found = markers.find(m => m.marker === marker);
+        if (found) selectPoint(found.id);
+      });
+
+      map.addOverlay(marker);
+
+      // 构造 data entry 并 push
+      const id = `point-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,4)}`;
+      const entry = {
+        id,
+        marker,
+        sequence,
+        point: { lat: lat.toFixed(6), lng: lng.toFixed(6) },
+        name: data.name || data.title || '',
+        description: data.description || '',
+        type: data.type || '讲解',
+        scoring: !!data.scoring,
+        score: typeof data.score === 'number' ? data.score : (parseInt(data.score,10) || 0),
+        nfc: !!data.nfc,
+        qa: data.qa || { question: '', options: ['', '', ''], correctIndex: null }
+      };
+      markers.push(entry);
+      // 如果导入的数据包含名称，立即在标记上显示标签
+      try {
+        if (entry.name && String(entry.name).trim() !== '') {
+          const label = new BMap.Label(String(entry.name), { offset: new BMap.Size(-24, -60) });
+          label.setStyle({ color: '#111', background: 'rgba(255,255,255,0.95)', border: '1px solid #e5e7eb', padding: '4px 8px', fontSize: '12px', borderRadius: '6px', whiteSpace: 'nowrap' });
+          entry.marker.setLabel(label);
+        }
+      } catch (e) { /* ignore */ }
+      return entry;
+    }
+
+    // 处理导入的 JSON 内容（支持两种格式：数组 或 { points: [...] }）
+    function importFromJSON(obj) {
+      // 解析点位数组
+      let points = [];
+      // 兼容不同结构
+      if (Array.isArray(obj)) {
+        points = obj;
+      } else if (obj && Array.isArray(obj.points)) {
+        points = obj.points;
+        // 如果包含 scenic/route 字段，填充输入框
+        if (obj.scenicName) document.getElementById('scenic-name').value = obj.scenicName;
+        if (obj.routeBranch) document.getElementById('route-branch').value = obj.routeBranch;
+      } else if (obj && obj.data && Array.isArray(obj.data.points)) {
+        // 兼容性处理（若 JSON 包含 data.points）
+        points = obj.data.points;
+      } else {
+        throw new Error('无法识别的 JSON 结构，需为点位数组或 { points: [...] }');
+      }
+
+      // 清除旧数据
+      clearAllMarkers();
+
+      // 按顺序创建标记
+      points.forEach((p, idx) => createMarkerFromData(p, idx + 1));
+
+      // 更新 UI
+      renderPointsList();
+      updatePointCount();
+      updateExportButtonState();
+    }
+
+    // 绑定导入按钮与文件输入
+    document.addEventListener('DOMContentLoaded', function() {
+      const importBtn = document.getElementById('import-btn');
+      const fileInput = document.getElementById('import-json');
+
+      if (importBtn && fileInput) {
+        importBtn.addEventListener('click', function() { fileInput.click(); });
+
+        fileInput.addEventListener('change', function(e) {
+          const f = e.target.files && e.target.files[0];
+          if (!f) return;
+          const reader = new FileReader();
+          reader.onload = function(ev) {
+            try {
+              const parsed = JSON.parse(ev.target.result);
+              importFromJSON(parsed);
+              alert('导入成功');
+            } catch (err) {
+              console.error(err);
+              alert('导入失败：文件不是有效的 JSON 或格式不匹配');
+            } finally {
+              // 清空 fileInput，方便重复导入同一文件
+              fileInput.value = '';
+            }
+          };
+          reader.onerror = function() {
+            alert('读取文件失败');
+            fileInput.value = '';
+          };
+          reader.readAsText(f, 'utf-8');
+        });
+      }
+    });
+
+
+    // 页面加载完成后初始化地图
+    window.onload = function() {
+      initMap();
+    };
+
+    // HTML 转义函数
+    function escapeHtml(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  </script>
+</body>
+</html>

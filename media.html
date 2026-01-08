@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>点位信息管理</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <!-- 引入FileSaver库用于文件保存 -->
+  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+  
+  <!-- 配置Tailwind自定义颜色和字体 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#165DFF',
+            secondary: '#36CFC9',
+            accent: '#FF7D00',
+            neutral: '#F5F7FA',
+            dark: '#1D2129'
+          },
+          fontFamily: {
+            inter: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+  
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .transition-height {
+        transition: max-height 0.3s ease-in-out;
+      }
+      .card-shadow {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      }
+    }
+  </style>
+</head>
+<body class="font-inter bg-neutral min-h-screen text-dark">
+  <!-- 顶部导航栏 -->
+  <header class="bg-white shadow-sm sticky top-0 z-50">
+    <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+      <h1 class="text-xl font-bold text-primary">点位信息管理</h1>
+      <label for="json-upload" class="bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-lg flex items-center transition-all duration-300 cursor-pointer">
+        <i class="fa fa-upload mr-2"></i>
+        <span>导入点位列表</span>
+      </label>
+      <input type="file" id="json-upload" accept=".json" class="hidden" />
+    </div>
+  </header>
+
+  <!-- 主内容区 -->
+  <main class="container mx-auto px-4 py-6">
+    <!-- 初始提示 -->
+    <div id="initial-message" class="text-center py-12">
+      <i class="fa fa-map-marker text-5xl text-primary/30 mb-4"></i>
+      <p class="text-gray-500">请点击上方"导入点位列表"按钮上传JSON文件</p>
+    </div>
+    
+    <!-- 点位列表容器 -->
+    <div id="points-container" class="space-y-6 hidden"></div>
+  </main>
+
+  <!-- 底部保存按钮 -->
+  <footer class="bg-white shadow-inner py-4 sticky bottom-0 z-40">
+    <div class="container mx-auto px-4">
+      <button id="save-media" class="w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg flex items-center justify-center transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+        <i class="fa fa-save mr-2"></i>
+        <span>保存媒体文件</span>
+      </button>
+    </div>
+  </footer>
+
+  <!-- 图片上传和摄像头模态框 -->
+  <div id="image-modal" class="fixed inset-0 bg-black/70 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-xl w-full max-w-md overflow-hidden">
+      <div class="p-4 border-b flex justify-between items-center">
+        <h3 class="font-bold text-lg">上传图片</h3>
+        <button id="close-modal" class="text-gray-500 hover:text-gray-700">
+          <i class="fa fa-times text-xl"></i>
+        </button>
+      </div>
+      <div class="p-4">
+        <div class="grid grid-cols-2 gap-4">
+          <label class="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:border-primary transition-colors">
+            <i class="fa fa-file-image-o text-3xl text-primary mb-2"></i>
+            <span class="text-sm text-center">选择本地图片</span>
+            <input type="file" accept="image/*" class="hidden" id="local-image-upload" />
+          </label>
+          <label class="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:border-primary transition-colors">
+            <i class="fa fa-camera text-3xl text-primary mb-2"></i>
+            <span class="text-sm text-center">拍摄照片</span>
+            <input type="file" accept="image/*" capture="environment" class="hidden" id="camera-image-upload" />
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 全局变量存储当前选中的点位ID
+    let currentPointId = null;
+    // 存储所有点位数据
+    let pointsData = [];
+    // 存储处理后的媒体文件
+    const mediaFiles = {
+      images: {}, // 格式: { pointId: [File, File...] }
+      audios: {}  // 格式: { pointId: File }
+    };
+    
+    // DOM元素
+    const jsonUploadInput = document.getElementById('json-upload');
+    const pointsContainer = document.getElementById('points-container');
+    const initialMessage = document.getElementById('initial-message');
+    const imageModal = document.getElementById('image-modal');
+    const closeModalBtn = document.getElementById('close-modal');
+    const localImageUpload = document.getElementById('local-image-upload');
+    const cameraImageUpload = document.getElementById('camera-image-upload');
+    const saveMediaBtn = document.getElementById('save-media');
+    
+    // 监听JSON文件上传
+    jsonUploadInput.addEventListener('change', handleJsonUpload);
+    
+    // 监听保存媒体按钮点击
+    saveMediaBtn.addEventListener('click', saveAllMedia);
+    
+    // 图片上传模态框控制
+    function openImageModal(pointId) {
+      currentPointId = pointId;
+      imageModal.classList.remove('hidden');
+      imageModal.classList.add('flex');
+    }
+    
+    function closeImageModal() {
+      currentPointId = null;
+      imageModal.classList.add('hidden');
+      imageModal.classList.remove('flex');
+      // 重置输入以允许重复选择同一文件
+      localImageUpload.value = '';
+      cameraImageUpload.value = '';
+    }
+    
+    closeModalBtn.addEventListener('click', closeImageModal);
+    
+    // 点击模态框外部关闭
+    imageModal.addEventListener('click', (e) => {
+      if (e.target === imageModal) {
+        closeImageModal();
+      }
+    });
+    
+    // 处理图片上传
+    localImageUpload.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        handleImageUpload(e.target.files[0]);
+      }
+    });
+    
+    cameraImageUpload.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        handleImageUpload(e.target.files[0]);
+      }
+    });
+    
+    // 更新保存按钮状态
+    function updateSaveButtonState() {
+      const hasImages = Object.keys(mediaFiles.images).length > 0;
+      const hasAudios = Object.keys(mediaFiles.audios).length > 0;
+      saveMediaBtn.disabled = !(hasImages || hasAudios);
+    }
+    
+    // 处理JSON文件上传
+    function handleJsonUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const jsonData = JSON.parse(e.target.result);
+          if (Array.isArray(jsonData)) {
+            pointsData = jsonData;
+            // 初始化媒体存储对象
+            pointsData.forEach(point => {
+              if (!mediaFiles.images[point.sequence]) {
+                mediaFiles.images[point.sequence] = [];
+              }
+              if (!mediaFiles.audios[point.sequence]) {
+                mediaFiles.audios[point.sequence] = null;
+              }
+            });
+            
+            renderPointsList();
+            // 显示点位列表，隐藏初始提示
+            pointsContainer.classList.remove('hidden');
+            initialMessage.classList.add('hidden');
+            updateSaveButtonState();
+          } else {
+            alert('JSON格式不正确，应为数组类型');
+          }
+        } catch (error) {
+          alert('解析JSON失败: ' + error.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+    
+    // 渲染点位列表
+    function renderPointsList() {
+      pointsContainer.innerHTML = '';
+      
+      pointsData.forEach(point => {
+        const pointCard = document.createElement('div');
+        pointCard.className = 'bg-white rounded-xl p-5 card-shadow transition-all duration-300 hover:shadow-lg';
+        pointCard.dataset.id = point.sequence;
+        
+        pointCard.innerHTML = `
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <h3 class="font-bold text-lg">点位 ${point.sequence}</h3>
+              <p class="text-gray-500 text-sm mt-1">名称: ${point.name || '未设置'}</p>
+              <p class="text-gray-500 text-sm">坐标: ${point.latitude}, ${point.longitude}</p>
+            </div>
+            <span class="bg-primary/10 text-primary text-xs px-2 py-1 rounded-full">
+              #${point.sequence}
+            </span>
+          </div>
+          
+          <div class="flex gap-3 mb-4">
+            <button class="upload-image-btn flex-1 bg-secondary hover:bg-secondary/90 text-white py-2 px-3 rounded-lg text-sm flex items-center justify-center transition-all">
+              <i class="fa fa-picture-o mr-1"></i> 上传图片
+            </button>
+            <button class="upload-audio-btn flex-1 bg-primary hover:bg-primary/90 text-white py-2 px-3 rounded-lg text-sm flex items-center justify-center transition-all">
+              <i class="fa fa-music mr-1"></i> 上传音频
+            </button>
+          </div>
+          
+          <div class="image-preview mt-3 ${mediaFiles.images[point.sequence] && mediaFiles.images[point.sequence].length > 0 ? '' : 'hidden'}">
+            <p class="text-sm font-medium text-gray-700 mb-2">已上传图片:</p>
+            <div class="flex gap-2 flex-wrap" id="image-preview-${point.sequence}"></div>
+          </div>
+          
+          <div class="audio-preview mt-3 ${mediaFiles.audios[point.sequence] ? '' : 'hidden'}">
+            <p class="text-sm font-medium text-gray-700 mb-2">已上传音频:</p>
+            <div class="bg-gray-100 p-3 rounded-lg flex justify-between items-center" id="audio-preview-${point.sequence}">
+              <div class="flex items-center">
+                <i class="fa fa-file-audio-o text-primary mr-2"></i>
+                <span class="text-sm truncate" id="audio-name-${point.sequence}"></span>
+              </div>
+              <audio controls class="h-6"></audio>
+            </div>
+          </div>
+        `;
+        
+        pointsContainer.appendChild(pointCard);
+        
+        // 绑定上传图片按钮事件
+        const imageBtn = pointCard.querySelector('.upload-image-btn');
+        imageBtn.addEventListener('click', () => {
+          openImageModal(point.sequence);
+        });
+        
+        // 绑定上传音频按钮事件
+        const audioBtn = pointCard.querySelector('.upload-audio-btn');
+        audioBtn.addEventListener('click', () => {
+          const audioInput = document.createElement('input');
+          audioInput.type = 'file';
+          audioInput.accept = '.mp3';
+          audioInput.onchange = (e) => {
+            if (e.target.files && e.target.files[0]) {
+              handleAudioUpload(point.sequence, e.target.files[0]);
+            }
+          };
+          audioInput.click();
+        });
+        
+        // 渲染已保存的图片
+        if (mediaFiles.images[point.sequence] && mediaFiles.images[point.sequence].length > 0) {
+          const previewContainer = document.getElementById(`image-preview-${point.sequence}`);
+          mediaFiles.images[point.sequence].forEach((file, index) => {
+            const imgDataUrl = URL.createObjectURL(file);
+            addImageToPreview(previewContainer, point.sequence, file, imgDataUrl, index);
+          });
+        }
+        
+        // 渲染已保存的音频
+        if (mediaFiles.audios[point.sequence]) {
+          const audioNameElement = document.getElementById(`audio-name-${point.sequence}`);
+          const audioElement = document.querySelector(`#audio-preview-${point.sequence} audio`);
+          audioNameElement.textContent = mediaFiles.audios[point.sequence].name;
+          audioElement.src = URL.createObjectURL(mediaFiles.audios[point.sequence]);
+        }
+      });
+    }
+    
+    // 添加图片到预览区
+    function addImageToPreview(container, pointId, file, dataUrl, index) {
+      const imgContainer = document.createElement('div');
+      imgContainer.className = 'relative group';
+      imgContainer.dataset.index = index;
+      
+      const imgElement = document.createElement('img');
+      imgElement.src = dataUrl;
+      imgElement.className = 'rounded-lg shadow-sm';
+      imgElement.alt = `点位${pointId}的图片`;
+      
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity';
+      removeBtn.innerHTML = '<i class="fa fa-times text-xs"></i>';
+      removeBtn.onclick = () => {
+        // 从数组中移除
+        mediaFiles.images[pointId].splice(index, 1);
+        imgContainer.remove();
+        
+        // 如果没有图片了，隐藏预览区域
+        const imagePreviewSection = container.closest('.image-preview');
+        if (mediaFiles.images[pointId].length === 0) {
+          imagePreviewSection.classList.add('hidden');
+        } else {
+          // 重新渲染预览区以更新索引
+          container.innerHTML = '';
+          mediaFiles.images[pointId].forEach((file, idx) => {
+            const imgDataUrl = URL.createObjectURL(file);
+            addImageToPreview(container, pointId, file, imgDataUrl, idx);
+          });
+        }
+        
+        updateSaveButtonState();
+      };
+      
+      imgContainer.appendChild(imgElement);
+      imgContainer.appendChild(removeBtn);
+      container.appendChild(imgContainer);
+    }
+    
+    // 处理图片上传和处理
+    function handleImageUpload(file) {
+      if (!currentPointId) return;
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          // 计算缩放后的尺寸（长边300px）
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > height) {
+            if (width > 300) {
+              height = height * (300 / width);
+              width = 300;
+            }
+          } else {
+            if (height > 300) {
+              width = width * (300 / height);
+              height = 300;
+            }
+          }
+          
+          // 使用Canvas绘制缩放后的图片
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // 将Canvas内容转为Blob
+          canvas.toBlob((blob) => {
+            // 创建重命名的文件（序号+img+序号）
+            const imageCount = mediaFiles.images[currentPointId] ? mediaFiles.images[currentPointId].length : 0;
+            const renamedFile = new File([blob], `${currentPointId}img${imageCount + 1}`, { type: blob.type });
+            
+            // 保存到媒体文件对象
+            if (!mediaFiles.images[currentPointId]) {
+              mediaFiles.images[currentPointId] = [];
+            }
+            mediaFiles.images[currentPointId].push(renamedFile);
+            
+            // 显示预览
+            const previewContainer = document.getElementById(`image-preview-${currentPointId}`);
+            const imagePreviewSection = previewContainer.closest('.image-preview');
+            imagePreviewSection.classList.remove('hidden');
+            
+            const imgDataUrl = URL.createObjectURL(renamedFile);
+            addImageToPreview(previewContainer, currentPointId, renamedFile, imgDataUrl, mediaFiles.images[currentPointId].length - 1);
+            
+            // 关闭模态框
+            closeImageModal();
+            updateSaveButtonState();
+          }, file.type || 'image/jpeg');
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+    
+    // 处理音频上传
+    function handleAudioUpload(pointId, file) {
+      // 验证文件类型
+      if (!file.type.match('audio/mp3') && !file.name.endsWith('.mp3')) {
+        alert('请上传MP3格式的音频文件');
+        return;
+      }
+      
+      // 重命名音频文件
+      const renamedFile = new File([file], `${pointId}audio.mp3`, { type: file.type });
+      
+      // 保存到媒体文件对象
+      mediaFiles.audios[pointId] = renamedFile;
+      
+      // 更新UI
+      const audioPreviewSection = document.querySelector(`[data-id="${pointId}"] .audio-preview`);
+      const audioPreviewContainer = document.getElementById(`audio-preview-${pointId}`);
+      const audioNameElement = document.getElementById(`audio-name-${pointId}`);
+      const audioElement = audioPreviewContainer.querySelector('audio');
+      
+      // 显示音频预览区域
+      audioPreviewSection.classList.remove('hidden');
+      
+      // 设置音频源
+      const audioUrl = URL.createObjectURL(renamedFile);
+      audioElement.src = audioUrl;
+      
+      // 显示音频名称
+      audioNameElement.textContent = renamedFile.name;
+      
+      updateSaveButtonState();
+    }
+    
+    // 保存所有媒体文件到本地
+    function saveAllMedia() {
+      // 收集所有文件
+      const allFiles = [];
+      
+      // 添加图片
+      Object.keys(mediaFiles.images).forEach(pointId => {
+        mediaFiles.images[pointId].forEach(file => {
+          allFiles.push(file);
+        });
+      });
+      
+      // 添加音频
+      Object.keys(mediaFiles.audios).forEach(pointId => {
+        if (mediaFiles.audios[pointId]) {
+          allFiles.push(mediaFiles.audios[pointId]);
+        }
+      });
+      
+      if (allFiles.length === 0) {
+        alert('没有可保存的媒体文件');
+        return;
+      }
+      
+      // 如果只有一个文件，直接保存
+      if (allFiles.length === 1) {
+        saveAs(allFiles[0], allFiles[0].name);
+        showSaveSuccessMessage();
+        return;
+      }
+      
+      // 多个文件时创建一个zip包（这里简化处理，逐个保存）
+      // 实际应用中可以使用JSZip库创建zip文件
+      allFiles.forEach((file, index) => {
+        // 延迟保存以避免浏览器限制
+        setTimeout(() => {
+          saveAs(file, file.name);
+          // 最后一个文件保存后显示成功消息
+          if (index === allFiles.length - 1) {
+            showSaveSuccessMessage();
+          }
+        }, index * 300);
+      });
+    }
+    
+    // 显示保存成功消息
+    function showSaveSuccessMessage() {
+      // 创建消息元素
+      const message = document.createElement('div');
+      message.className = 'fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      message.textContent = '媒体文件保存成功';
+      
+      // 添加到页面
+      document.body.appendChild(message);
+      
+      // 3秒后移除消息
+      setTimeout(() => {
+        message.classList.add('opacity-0', 'transition-opacity', 'duration-300');
+        setTimeout(() => {
+          document.body.removeChild(message);
+        }, 300);
+      }, 3000);
+    }
+  </script>
+</body>
+</html>

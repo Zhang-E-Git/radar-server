@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>百度地图围栏工具</title>
+  <!-- 引入Tailwindwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 引入Font Awesome -->
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <!-- 百度地图API -->
+  <script type="text/javascript" src="https://api.map.baidu.com/api?v=3.0&ak=YqnA3NZ93MwEeukMTpweBXY6OU4pKu3L"></script>
+
+  <!-- 配置Tailwind -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#2E7DFF',    // 安全区-蓝色
+            warning: '#FF5252',    // 警示区-红色
+            secondary: '#4CAF50',
+            neutral: '#F5F7FA',
+            dark: '#1D2129',
+          },
+          fontFamily: {
+            inter: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .map-container {
+        height: calc(100vh - 64px);
+      }
+      .card-shadow {
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
+      }
+      .transition-all-300 {
+        transition: all 300ms ease-in-out;
+      }
+      .marker-highlight {
+        animation: pulse 1.5s infinite;
+        border-radius: 50%;
+      }
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(46, 125, 255, 0.4);
+        }
+        70% {
+          box-shadow: 0 0 0 10px rgba(46, 125, 255, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(46, 125, 255, 0);
+        }
+      }
+      .warning-pulse {
+        animation: warningPulse 1.5s infinite;
+        border-radius: 50%;
+      }
+      @keyframes warningPulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.4);
+        }
+        70% {
+          box-shadow: 0 0 0 10px rgba(255, 82, 82, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(255, 82, 82, 0);
+        }
+      }
+      .tab-active {
+        @apply bg-warning text-white;
+      }
+      .tab-inactive {
+        @apply bg-gray-100 text-gray-600 hover:bg-gray-200;
+      }
+    }
+  </style>
+</head>
+<body class="font-inter bg-neutral text-dark overflow-hidden">
+  <!-- 顶部导航栏 -->
+  <header class="bg-white shadow-md px-4 md:px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center space-x-2">
+      <i class="fa fa-map-marker text-primary text-2xl"></i>
+      <h1 class="text-xl md:text-2xl font-bold text-primary">百度地图围栏工具</h1>
+    </div>
+    <div class="text-sm text-gray-500 hidden md:block">
+      选择区域类型，点击地图添加点位生成围栏
+    </div>
+  </header>
+
+  <!-- 主内容区 -->
+  <main class="flex flex-col md:flex-row h-[calc(100vh-64px)]">
+    <!-- 地图容器 -->
+    <div id="map" class="map-container w-full md:w-3/4 z-10"></div>
+    
+    <!-- 信息面板 -->
+    <div class="bg-white w-full md:w-1/4 p-4 md:p-6 overflow-y-auto card-shadow z-20 flex flex-col">
+      <div class="mb-6">
+        <h2 class="text-lg font-semibold mb-2 flex items-center">
+          <i class="fa fa-info-circle text-primary mr-2"></i>使用说明
+        </h2>
+        <p class="text-sm text-gray-600 leading-relaxed">
+          选择区域类型，在地图上点击添加点位，系统将自动连接所有点位形成对应区域围栏。点击区域按钮可查看点位数据。
+        </p>
+        
+        <!-- 区域名称输入框 -->
+        <div class="mt-4 space-y-3">
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">区域名称</label>
+            <input id="zone-name" type="text" placeholder="请输入区域名称" 
+                  class="w-full p-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" />
+          </div>
+        </div>
+        
+        <!-- 区域类型按钮组 -->
+        <div class="grid grid-cols-2 gap-3 mt-4">
+          <button id="safe-zone-button" class="bg-primary hover:bg-primary/90 text-white py-2 px-4 rounded-lg transition-all-300 flex items-center justify-center active">
+            <i class="fa fa-shield mr-2"></i>安全区
+          </button>
+          <button id="warning-zone-button" class="bg-warning hover:bg-warning/90 text-white py-2 px-4 rounded-lg transition-all-300 flex items-center justify-center">
+            <i class="fa fa-exclamation-triangle mr-2"></i>警示区
+          </button>
+        </div>
+      </div>
+      
+      <!-- 安全区数据表格区域 -->
+      <div id="safe-zone-container" class="border-t border-gray-100 pt-4 hidden flex-1">
+        <h2 class="text-lg font-semibold mb-4 flex items-center">
+          <i class="fa fa-table text-primary mr-2"></i>安全区点位数据
+          <span id="safe-point-count" class="ml-2 text-sm bg-primary/10 text-primary px-2 py-0.5 rounded-full">0 个点位</span>
+        </h2>
+        
+        <!-- 点位表格 -->
+        <div class="overflow-x-auto mb-4">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 border-b">
+                <th class="py-2 px-3 text-left font-medium text-gray-500">序号</th>
+                <th class="py-2 px-3 text-left font-medium text-gray-500">纬度</th>
+                <th class="py-2 px-3 text-left font-medium text-gray-500">经度</th>
+                <th class="py-2 px-3 text-left font-medium text-gray-500">操作</th>
+              </tr>
+            </thead>
+            <tbody id="safe-points-table">
+              <tr>
+                <td colspan="4" class="py-8 text-center text-gray-400">暂无点位数据</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- 操作按钮 -->
+        <div class="space-y-2">
+          <button id="export-safe" class="w-full bg-primary hover:bg-primary/90 text-white py-2 px-4 rounded-lg transition-all-300 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+            <i class="fa fa-download mr-2"></i>导出安全区数据
+          </button>
+          <button id="clear-safe" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 px-4 rounded-lg transition-all-300 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+            <i class="fa fa-trash mr-2"></i>清空安全区点位
+          </button>
+        </div>
+      </div>
+      
+      <!-- 警示区数据表格区域 -->
+      <div id="warning-zone-container" class="border-t border-gray-100 pt-4 hidden flex-1">
+        <!-- 警示区分组标签和新增按钮 -->
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-lg font-semibold flex items-center">
+            <i class="fa fa-table text-warning mr-2"></i>警示区点位数据
+            <span id="warning-point-count" class="ml-2 text-sm bg-warning/10 text-warning px-2 py-0.5 rounded-full">0 个点位</span>
+          </h2>
+          <button id="add-warning-group" class="text-sm bg-warning hover:bg-warning/90 text-white py-1 px-3 rounded-lg transition-all-300 flex items-center">
+            <i class="fa fa-plus mr-1"></i> 新增
+          </button>
+        </div>
+        
+        <!-- 分组标签切换栏 -->
+        <div id="warning-groups-tabs" class="flex space-x-2 mb-4 overflow-x-auto pb-2">
+          <!-- 分组标签会动态生成 -->
+        </div>
+        
+        <!-- 点位表格 -->
+        <div class="overflow-x-auto mb-4">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 border-b">
+                <th class="py-2 px-3 text-left font-medium text-gray-500">序号</th>
+                <th class="py-2 px-3 text-left font-medium text-gray-500">纬度</th>
+                <th class="py-2 px-3 text-left font-medium text-gray-500">经度</th>
+                <th class="py-2 px-3 text-left font-medium text-gray-500">操作</th>
+              </tr>
+            </thead>
+            <tbody id="warning-points-table">
+              <tr>
+                <td colspan="4" class="py-8 text-center text-gray-400">暂无点位数据</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- 操作按钮 -->
+        <div class="space-y-2">
+          <button id="export-warning" class="w-full bg-warning hover:bg-warning/90 text-white py-2 px-4 rounded-lg transition-all-300 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+            <i class="fa fa-download mr-2"></i>导出当前警示区数据
+          </button>
+          <button id="clear-warning" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 px-4 rounded-lg transition-all-300 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+            <i class="fa fa-trash mr-2"></i>清空当前警示区点位
+          </button>
+          <button id="delete-warning-group" class="w-full bg-gray-200 hover:bg-red-500 hover:text-white text-gray-700 py-2 px-4 rounded-lg transition-all-300 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+            <i class="fa fa-times mr-2"></i>删除当前警示区组
+          </button>
+        </div>
+      </div>
+      
+      <!-- 提示信息 -->
+      <div id="copy-toast" class="fixed bottom-6 right-6 bg-dark text-white px-4 py-2 rounded-lg shadow-lg opacity-0 transition-all-300 transform translate-y-4">
+        操作成功!
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // 初始化地图和变量
+    let map;
+    let currentZoneType = 'safe'; // 默认当前区域类型：safe-安全区，warning-警示区
+    let currentWarningGroupId = 0; // 当前选中的警示区组ID
+    
+    // 存储安全区数据
+    const safeZoneData = {
+      markers: [],       // 存储所有标记点
+      fencePoints: [],   // 存储围栏点坐标
+      polygon: null,     // 围栏多边形对象
+      pointId: 0,        // 点位ID计数器
+      visible: false     // 数据是否可见
+    };
+    
+    // 存储多个警示区组数据
+    let warningZoneGroups = [
+      {
+        id: 0,
+        name: "警示区1",
+        markers: [],
+        fencePoints: [],
+        polygon: null,
+        pointId: 0,
+        visible: false
+      }
+    ];
+    let warningGroupIdCounter = 1; // 警示区组ID计数器
+    
+    // 区域样式配置
+    const zoneStyles = {
+      safe: {
+        color: "#2E7DFF",
+        fillColor: "rgba(46, 125, 255, 0.1)",
+        pulseClass: "marker-highlight"
+      },
+      warning: {
+        color: "#FF5252",
+        fillColor: "rgba(255, 82, 82, 0.1)",
+        pulseClass: "warning-pulse"
+      }
+    };
+    
+    function initMap() {
+      // 创建地图实例，中心点设为北京
+      map = new BMap.Map("map");
+      const point = new BMap.Point(116.404, 39.915);
+      map.centerAndZoom(point, 15);
+      
+      // 启用地图控件
+      map.enableScrollWheelZoom(true);  // 启用滚轮缩放
+      map.addControl(new BMap.NavigationControl());  // 导航控件
+      map.addControl(new BMap.ScaleControl());  // 比例尺控件
+      map.addControl(new BMap.OverviewMapControl());  // 缩略图控件
+      
+      // 点击地图事件 - 添加新点位
+      map.addEventListener("click", function(e) {
+        addNewPoint(e.point);
+      });
+      
+      // 定位到用户当前位置
+      const geolocation = new BMap.Geolocation();
+      geolocation.getCurrentPosition(function(r) {
+        if (this.getStatus() === BMAP_STATUS_SUCCESS) {
+          map.panTo(r.point);
+        }
+      });
+      
+      // 绑定区域按钮事件
+      document.getElementById('safe-zone-button').addEventListener('click', function() {
+        switchZone('safe');
+      });
+      
+      document.getElementById('warning-zone-button').addEventListener('click', function() {
+        switchZone('warning');
+      });
+      
+      // 绑定安全区导出和清空按钮事件
+      document.getElementById('export-safe').addEventListener('click', function() {
+        exportZoneData('safe');
+      });
+      
+      document.getElementById('clear-safe').addEventListener('click', function() {
+        if (confirm('确定要清空所有安全区点位吗？')) {
+          clearAllPoints('safe');
+        }
+      });
+      
+      // 绑定警示区导出和清空按钮事件
+      document.getElementById('export-warning').addEventListener('click', function() {
+        exportZoneData('warning');
+      });
+      
+      document.getElementById('clear-warning').addEventListener('click', function() {
+        if (confirm('确定要清空当前警示区的所有点位吗？')) {
+          clearAllPoints('warning');
+        }
+      });
+      
+      // 绑定新增警示区组按钮事件
+      document.getElementById('add-warning-group').addEventListener('click', function() {
+        addNewWarningGroup();
+      });
+      
+      // 绑定删除警示区组按钮事件
+      document.getElementById('delete-warning-group').addEventListener('click', function() {
+        if (warningZoneGroups.length <= 1) {
+          showToast('至少保留一个警示区组');
+          return;
+        }
+        
+        if (confirm('确定要删除当前警示区组吗？')) {
+          deleteWarningGroup(currentWarningGroupId);
+        }
+      });
+      
+      // 初始化警示区分组标签
+      renderWarningGroupTabs();
+    }
+    
+    // 切换区域类型
+    function switchZone(zoneType) {
+      // 先隐藏当前区域的所有元素
+      if (currentZoneType === 'safe') {
+        hideZoneElements('safe');
+      } else {
+        hideZoneElements('warning');
+      }
+      
+      currentZoneType = zoneType;
+      
+      // 更新按钮状态
+      document.getElementById('safe-zone-button').classList.remove('active', 'ring-2', 'ring-offset-2', 'ring-primary');
+      document.getElementById('warning-zone-button').classList.remove('active', 'ring-2', 'ring-offset-2', 'ring-warning');
+      
+      if (zoneType === 'safe') {
+        document.getElementById('safe-zone-button').classList.add('ring-2', 'ring-offset-2', 'ring-primary');
+        safeZoneData.visible = true;
+        document.getElementById('safe-zone-container').classList.remove('hidden');
+        document.getElementById('warning-zone-container').classList.add('hidden');
+        
+        // 显示安全区元素
+        showZoneElements('safe');
+        renderPointsTable('safe');
+      } else {
+        document.getElementById('warning-zone-button').classList.add('ring-2', 'ring-offset-2', 'ring-warning');
+        
+        // 显示当前选中的警示区组元素
+        warningZoneGroups.forEach(group => {
+          group.visible = group.id === currentWarningGroupId;
+        });
+        
+        document.getElementById('safe-zone-container').classList.add('hidden');
+        document.getElementById('warning-zone-container').classList.remove('hidden');
+        
+        // 显示当前警示区组元素
+        showZoneElements('warning');
+        renderPointsTable('warning');
+      }
+      
+      // 更新计数和按钮状态
+      updatePointCount(zoneType);
+      updateButtonStates(zoneType);
+    }
+    
+    // 隐藏区域元素（标记和围栏）
+    function hideZoneElements(zoneType) {
+      if (zoneType === 'safe') {
+        // 隐藏安全区标记
+        safeZoneData.markers.forEach(item => {
+          item.marker.hide();
+        });
+        // 隐藏安全区围栏
+        if (safeZoneData.polygon) {
+          safeZoneData.polygon.hide();
+        }
+      } else {
+        // 隐藏所有警示区组的标记和围栏
+        warningZoneGroups.forEach(group => {
+          group.markers.forEach(item => {
+            item.marker.hide();
+          });
+          if (group.polygon) {
+            group.polygon.hide();
+          }
+        });
+      }
+    }
+    
+    // 显示区域元素（标记和围栏）
+    function showZoneElements(zoneType) {
+      if (zoneType === 'safe') {
+        // 显示安全区标记
+        safeZoneData.markers.forEach(item => {
+          item.marker.show();
+        });
+        // 显示安全区围栏
+        if (safeZoneData.polygon) {
+          safeZoneData.polygon.show();
+        }
+      } else {
+        // 只显示当前选中的警示区组的元素
+        const currentGroup = warningZoneGroups.find(group => group.id === currentWarningGroupId);
+        if (currentGroup) {
+          currentGroup.markers.forEach(item => {
+            item.marker.show();
+          });
+          if (currentGroup.polygon) {
+            currentGroup.polygon.show();
+          }
+        }
+      }
+    }
+    
+    // 添加新的警示区组
+    function addNewWarningGroup() {
+      const newGroupName = `警示区${warningGroupIdCounter + 1}`;
+      const newGroup = {
+        id: warningGroupIdCounter++,
+        name: newGroupName,
+        markers: [],
+        fencePoints: [],
+        polygon: null,
+        pointId: 0,
+        visible: false
+      };
+      
+      warningZoneGroups.push(newGroup);
+      currentWarningGroupId = newGroup.id;
+      
+      // 隐藏当前显示的警示区元素
+      hideZoneElements('warning');
+      
+      // 更新标签
+      renderWarningGroupTabs();
+      
+      // 更新表格
+      renderPointsTable('warning');
+      
+      // 更新计数和按钮状态
+      updatePointCount('warning');
+      updateButtonStates('warning');
+      
+      // 显示新组
+      showZoneElements('warning');
+      
+      showToast(`已创建新的警示区组: ${newGroupName}`);
+    }
+    
+    // 切换警示区组
+    function switchWarningGroup(groupId) {
+      // 隐藏当前组元素
+      hideZoneElements('warning');
+      
+      currentWarningGroupId = groupId;
+      
+      // 更新标签状态
+      renderWarningGroupTabs();
+      
+      // 更新表格
+      renderPointsTable('warning');
+      
+      // 更新计数和按钮状态
+      updatePointCount('warning');
+      updateButtonStates('warning');
+      
+      // 显示新组元素
+      showZoneElements('warning');
+    }
+    
+    // 删除警示区组
+    function deleteWarningGroup(groupId) {
+      // 找到要删除的组的索引
+      const groupIndex = warningZoneGroups.findIndex(group => group.id === groupId);
+      if (groupIndex === -1) return;
+      
+      // 从地图上移除该组的所有标记和围栏
+      const groupToDelete = warningZoneGroups[groupIndex];
+      groupToDelete.markers.forEach(item => {
+        map.removeOverlay(item.marker);
+      });
+      if (groupToDelete.polygon) {
+        map.removeOverlay(groupToDelete.polygon);
+      }
+      
+      // 从数组中删除该组
+      warningZoneGroups.splice(groupIndex, 1);
+      
+      // 切换到第一个组
+      currentWarningGroupId = warningZoneGroups[0].id;
+      
+      // 更新标签
+      renderWarningGroupTabs();
+      
+      // 更新表格
+      renderPointsTable('warning');
+      
+      // 更新计数和按钮状态
+      updatePointCount('warning');
+      updateButtonStates('warning');
+      
+      // 显示当前组元素
+      showZoneElements('warning');
+      
+      showToast('警示区组已删除');
+    }
+    
+    // 渲染警示区分组标签
+    function renderWarningGroupTabs() {
+      const tabsContainer = document.getElementById('warning-groups-tabs');
+      tabsContainer.innerHTML = '';
+      
+      warningZoneGroups.forEach(group => {
+        const tab = document.createElement('button');
+        tab.className = `px-3 py-1 rounded-full text-sm font-medium transition-all-300 whitespace-nowrap ${
+          group.id === currentWarningGroupId ? 'tab-active' : 'tab-inactive'
+        }`;
+        tab.textContent = group.name;
+        tab.addEventListener('click', () => {
+          switchWarningGroup(group.id);
+        });
+        tabsContainer.appendChild(tab);
+      });
+    }
+    
+    // 添加新点位
+    function addNewPoint(point) {
+      if (currentZoneType === 'safe') {
+        // 处理安全区点位
+        const zone = safeZoneData;
+        const style = zoneStyles.safe;
+        
+        zone.pointId++;
+        const id = `safe-point-${zone.pointId}`;
+        const sequence = zone.markers.length + 1;
+        
+        // 创建SVG图标作为自定义标记
+        const svg = `
+          <svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="18" cy="18" r="16" fill="${style.color}" stroke="white" stroke-width="2"/>
+            <text x="18" y="23" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle" fill="white">${sequence}</text>
+          </svg>
+        `;
+        const svgBase64 = btoa(unescape(encodeURIComponent(svg)));
+        const iconUrl = `data:image/svg+xml;base64,${svgBase64}`;
+        
+        // 创建并添加标记
+        const markerSize = new BMap.Size(36, 36);
+        const iconAnchor = new BMap.Size(18, 36);
+        const myIcon = new BMap.Icon(iconUrl, markerSize, {
+          anchor: iconAnchor,
+          imageSize: markerSize
+        });
+        
+        const marker = new BMap.Marker(point, {icon: myIcon});
+        marker.pointId = id;
+        marker.sequence = sequence;
+        marker.zoneType = 'safe';
+        
+        // 点击标记点事件
+        marker.addEventListener("click", function(e) {
+          e.stopPropagation();
+          const infoWindow = new BMap.InfoWindow(`
+            安全区 点位 ${sequence}<br>
+            纬度: ${point.lat.toFixed(6)}<br>
+            经度: ${point.lng.toFixed(6)}<br>
+            <button onclick="deletePoint('${id}', 'safe')" style="margin-top:8px;padding:4px 8px;background:#f44336;color:white;border:none;border-radius:4px;cursor:pointer;">删除</button>
+          `);
+          marker.openInfoWindow(infoWindow);
+        });
+        
+        map.addOverlay(marker);
+        map.panTo(point);
+        
+        // 显示信息窗口
+        const infoWindow = new BMap.InfoWindow(`
+          安全区 点位 ${sequence}<br>
+          纬度: ${point.lat.toFixed(6)}<br>
+          经度: ${point.lng.toFixed(6)}<br>
+          <button onclick="deletePoint('${id}', 'safe')" style="margin-top:8px;padding:4px 8px;background:#f44336;color:white;border:none;border-radius:4px;cursor:pointer;">删除</button>
+        `);
+        marker.openInfoWindow(infoWindow);
+        
+        // 保存点位数据
+        const pointData = {
+          id,
+          marker,
+          sequence,
+          point: { lat: point.lat.toFixed(6), lng: point.lng.toFixed(6) }
+        };
+        
+        zone.markers.push(pointData);
+        zone.fencePoints.push(new BMap.Point(point.lng, point.lat));
+        
+        // 更新围栏
+        updateFence('safe');
+      } else {
+        // 处理警示区点位
+        const currentGroup = warningZoneGroups.find(group => group.id === currentWarningGroupId);
+        if (!currentGroup) return;
+        
+        const style = zoneStyles.warning;
+        
+        currentGroup.pointId++;
+        const id = `warning-point-${currentGroup.id}-${currentGroup.pointId}`;
+        const sequence = currentGroup.markers.length + 1;
+        
+        // 创建SVG图标作为自定义标记
+        const svg = `
+          <svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="18" cy="18" r="16" fill="${style.color}" stroke="white" stroke-width="2"/>
+            <text x="18" y="23" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle" fill="white">${sequence}</text>
+          </svg>
+        `;
+        const svgBase64 = btoa(unescape(encodeURIComponent(svg)));
+        const iconUrl = `data:image/svg+xml;base64,${svgBase64}`;
+        
+        // 创建并添加标记
+        const markerSize = new BMap.Size(36, 36);
+        const iconAnchor = new BMap.Size(18, 36);
+        const myIcon = new BMap.Icon(iconUrl, markerSize, {
+          anchor: iconAnchor,
+          imageSize: markerSize
+        });
+        
+        const marker = new BMap.Marker(point, {icon: myIcon});
+        marker.pointId = id;
+        marker.sequence = sequence;
+        marker.zoneType = 'warning';
+        marker.groupId = currentGroup.id;
+        
+        // 点击标记点事件
+        marker.addEventListener("click", function(e) {
+          e.stopPropagation();
+          const infoWindow = new BMap.InfoWindow(`
+            ${currentGroup.name} 点位 ${sequence}<br>
+            纬度: ${point.lat.toFixed(6)}<br>
+            经度: ${point.lng.toFixed(6)}<br>
+            <button onclick="deletePoint('${id}', 'warning')" style="margin-top:8px;padding:4px 8px;background:#f44336;color:white;border:none;border-radius:4px;cursor:pointer;">删除</button>
+          `);
+          marker.openInfoWindow(infoWindow);
+        });
+        
+        map.addOverlay(marker);
+        map.panTo(point);
+        
+        // 显示信息窗口
+        const infoWindow = new BMap.InfoWindow(`
+          ${currentGroup.name} 点位 ${sequence}<br>
+          纬度: ${point.lat.toFixed(6)}<br>
+          经度: ${point.lng.toFixed(6)}<br>
+          <button onclick="deletePoint('${id}', 'warning')" style="margin-top:8px;padding:4px 8px;background:#f44336;color:white;border:none;border-radius:4px;cursor:pointer;">删除</button>
+        `);
+        marker.openInfoWindow(infoWindow);
+        
+        // 保存点位数据
+        const pointData = {
+          id,
+          marker,
+          sequence,
+          point: { lat: point.lat.toFixed(6), lng: point.lng.toFixed(6) }
+        };
+        
+        currentGroup.markers.push(pointData);
+        currentGroup.fencePoints.push(new BMap.Point(point.lng, point.lat));
+        
+        // 更新围栏
+        updateFence('warning');
+      }
+      
+      // 更新表格
+      renderPointsTable(currentZoneType);
+      
+      // 更新计数和按钮状态
+      updatePointCount(currentZoneType);
+      updateButtonStates(currentZoneType);
+    }
+    
+    // 更新围栏
+    function updateFence(zoneType) {
+      if (zoneType === 'safe') {
+        const zone = safeZoneData;
+        const style = zoneStyles.safe;
+        
+        // 先移除旧的围栏
+        if (zone.polygon) {
+          map.removeOverlay(zone.polygon);
+          zone.polygon = null;
+        }
+        
+        // 至少需要3个点才能形成围栏
+        if (zone.fencePoints.length >= 3) {
+          // 创建多边形覆盖物
+          zone.polygon = new BMap.Polygon(zone.fencePoints, {
+            strokeColor: style.color,
+            strokeWeight: 3,
+            strokeOpacity: 0.8,
+            fillColor: style.fillColor,
+            fillOpacity: 0.1,
+            strokeStyle: "dashed"
+          });
+          
+          // 添加到地图
+          map.addOverlay(zone.polygon);
+        }
+      } else {
+        const currentGroup = warningZoneGroups.find(group => group.id === currentWarningGroupId);
+        if (!currentGroup) return;
+        
+        const style = zoneStyles.warning;
+        
+        // 先移除旧的围栏
+        if (currentGroup.polygon) {
+          map.removeOverlay(currentGroup.polygon);
+          currentGroup.polygon = null;
+        }
+        
+        // 至少需要3个点才能形成围栏
+        if (currentGroup.fencePoints.length >= 3) {
+          // 创建多边形覆盖物
+          currentGroup.polygon = new BMap.Polygon(currentGroup.fencePoints, {
+            strokeColor: style.color,
+            strokeWeight: 3,
+            strokeOpacity: 0.8,
+            fillColor: style.fillColor,
+            fillOpacity: 0.1,
+            strokeStyle: "dashed"
+          });
+          
+          // 添加到地图
+          map.addOverlay(currentGroup.polygon);
+        }
+      }
+    }
+    
+    // 渲染点位表格
+    function renderPointsTable(zoneType) {
+      if (zoneType === 'safe') {
+        const zone = safeZoneData;
+        const tableBody = document.getElementById('safe-points-table');
+        
+        if (zone.markers.length === 0) {
+          tableBody.innerHTML = `
+            <tr>
+              <td colspan="4" class="py-8 text-center text-gray-400">暂无点位数据</td>
+            </tr>
+          `;
+          return;
+        }
+        
+        tableBody.innerHTML = '';
+        
+        zone.markers.forEach((item) => {
+          const point = item.point;
+          
+          const row = document.createElement('tr');
+          row.className = 'border-b hover:bg-gray-50';
+          row.innerHTML = `
+            <td class="py-2 px-3">${item.sequence}</td>
+            <td class="py-2 px-3 font-mono">${point.lat}</td>
+            <td class="py-2 px-3 font-mono">${point.lng}</td>
+            <td class="py-2 px-3">
+              <button onclick="deletePoint('${item.id}', 'safe')" class="text-red-500 hover:text-red-600 transition-all-300">
+                <i class="fa fa-trash"></i>
+              </button>
+            </td>
+          `;
+          
+          tableBody.appendChild(row);
+        });
+      } else {
+        const currentGroup = warningZoneGroups.find(group => group.id === currentWarningGroupId);
+        if (!currentGroup) return;
+        
+        const tableBody = document.getElementById('warning-points-table');
+        
+        if (currentGroup.markers.length === 0) {
+          tableBody.innerHTML = `
+            <tr>
+              <td colspan="4" class="py-8 text-center text-gray-400">暂无点位数据</td>
+            </tr>
+          `;
+          return;
+        }
+        
+        tableBody.innerHTML = '';
+        
+        currentGroup.markers.forEach((item) => {
+          const point = item.point;
+          
+          const row = document.createElement('tr');
+          row.className = 'border-b hover:bg-gray-50';
+          row.innerHTML = `
+            <td class="py-2 px-3">${item.sequence}</td>
+            <td class="py-2 px-3 font-mono">${point.lat}</td>
+            <td class="py-2 px-3 font-mono">${point.lng}</td>
+            <td class="py-2 px-3">
+              <button onclick="deletePoint('${item.id}', 'warning')" class="text-red-500 hover:text-red-600 transition-all-300">
+                <i class="fa fa-trash"></i>
+              </button>
+            </td>
+          `;
+          
+          tableBody.appendChild(row);
+        });
+      }
+    }
+    
+    // 删除点位
+    function deletePoint(id, zoneType) {
+      if (zoneType === 'safe') {
+        const zone = safeZoneData;
+        const idx = zone.markers.findIndex(item => item.id === id);
+        
+        if (idx !== -1) {
+          // 从地图移除标记
+          map.removeOverlay(zone.markers[idx].marker);
+          // 从数组中移除
+          zone.markers.splice(idx, 1);
+          zone.fencePoints.splice(idx, 1);
+          
+          // 更新剩余点位的序号和标记
+          zone.markers.forEach((item, index) => {
+            const newSeq = index + 1;
+            item.sequence = newSeq;
+            
+            // 更新标记上的序号
+            const style = zoneStyles.safe;
+            const svg = `
+              <svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="18" cy="18" r="16" fill="${style.color}" stroke="white" stroke-width="2"/>
+                <text x="18" y="23" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle" fill="white">${newSeq}</text>
+              </svg>
+            `;
+            const svgBase64 = btoa(unescape(encodeURIComponent(svg)));
+            const iconUrl = `data:image/svg+xml;base64,${svgBase64}`;
+            
+            const markerSize = new BMap.Size(36, 36);
+            const iconAnchor = new BMap.Size(18, 36);
+            const myIcon = new BMap.Icon(iconUrl, markerSize, {
+              anchor: iconAnchor,
+              imageSize: markerSize
+            });
+            
+            item.marker.setIcon(myIcon);
+          });
+          
+          // 更新围栏
+          updateFence('safe');
+          
+          // 更新表格
+          renderPointsTable('safe');
+          
+          // 更新计数和按钮状态
+          updatePointCount('safe');
+          updateButtonStates('safe');
+        }
+      } else {
+        const currentGroup = warningZoneGroups.find(group => group.id === currentWarningGroupId);
+        if (!currentGroup) return;
+        
+        const idx = currentGroup.markers.findIndex(item => item.id === id);
+        
+        if (idx !== -1) {
+          // 从地图移除标记
+          map.removeOverlay(currentGroup.markers[idx].marker);
+          // 从数组中移除
+          currentGroup.markers.splice(idx, 1);
+          currentGroup.fencePoints.splice(idx, 1);
+          
+          // 更新剩余点位的序号和标记
+          currentGroup.markers.forEach((item, index) => {
+            const newSeq = index + 1;
+            item.sequence = newSeq;
+            
+            // 更新标记上的序号
+            const style = zoneStyles.warning;
+            const svg = `
+              <svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="18" cy="18" r="16" fill="${style.color}" stroke="white" stroke-width="2"/>
+                <text x="18" y="23" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle" fill="white">${newSeq}</text>
+              </svg>
+            `;
+            const svgBase64 = btoa(unescape(encodeURIComponent(svg)));
+            const iconUrl = `data:image/svg+xml;base64,${svgBase64}`;
+            
+            const markerSize = new BMap.Size(36, 36);
+            const iconAnchor = new BMap.Size(18, 36);
+            const myIcon = new BMap.Icon(iconUrl, markerSize, {
+              anchor: iconAnchor,
+              imageSize: markerSize
+            });
+            
+            item.marker.setIcon(myIcon);
+          });
+          
+          // 更新围栏
+          updateFence('warning');
+          
+          // 更新表格
+          renderPointsTable('warning');
+          
+          // 更新计数和按钮状态
+          updatePointCount('warning');
+          updateButtonStates('warning');
+        }
+      }
+    }
+    
+    // 清空所有点位
+    function clearAllPoints(zoneType) {
+      if (zoneType === 'safe') {
+        const zone = safeZoneData;
+        
+        // 移除所有标记
+        zone.markers.forEach(item => {
+          map.removeOverlay(item.marker);
+        });
+        
+        // 移除围栏
+        if (zone.polygon) {
+          map.removeOverlay(zone.polygon);
+          zone.polygon = null;
+        }
+        
+        // 清空数组
+        zone.markers.length = 0;
+        zone.fencePoints.length = 0;
+        zone.pointId = 0;
+        
+        // 更新表格
+        renderPointsTable('safe');
+        
+        // 更新计数和按钮状态
+        updatePointCount('safe');
+        updateButtonStates('safe');
+      } else {
+        const currentGroup = warningZoneGroups.find(group => group.id === currentWarningGroupId);
+        if (!currentGroup) return;
+        
+        // 移除所有标记
+        currentGroup.markers.forEach(item => {
+          map.removeOverlay(item.marker);
+        });
+        
+        // 移除围栏
+        if (currentGroup.polygon) {
+          map.removeOverlay(currentGroup.polygon);
+          currentGroup.polygon = null;
+        }
+        
+        // 清空数组
+        currentGroup.markers.length = 0;
+        currentGroup.fencePoints.length = 0;
+        currentGroup.pointId = 0;
+        
+        // 更新表格
+        renderPointsTable('warning');
+        
+        // 更新计数和按钮状态
+        updatePointCount('warning');
+        updateButtonStates('warning');
+      }
+    }
+    
+    // 导出区域数据
+    function exportZoneData(zoneType) {
+      if (zoneType === 'safe') {
+        const zone = safeZoneData;
+        const zoneName = document.getElementById('zone-name').value.trim() || '安全区';
+        
+        const data = {
+          name: zoneName,
+          type: '安全区',
+          createTime: new Date().toISOString(),
+          pointCount: zone.markers.length,
+          points: zone.markers.map(item => ({
+            sequence: item.sequence,
+            latitude: parseFloat(item.point.lat),
+            longitude: parseFloat(item.point.lng)
+          }))
+        };
+        
+        const content = JSON.stringify(data, null, 2);
+        const blob = new Blob([content], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${zoneName}-安全区数据-${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { 
+          document.body.removeChild(a); 
+          URL.revokeObjectURL(url); 
+        }, 0);
+        
+        showToast('安全区数据导出成功');
+      } else {
+        const currentGroup = warningZoneGroups.find(group => group.id === currentWarningGroupId);
+        if (!currentGroup) return;
+        
+        const zoneName = document.getElementById('zone-name').value.trim() || currentGroup.name;
+        
+        const data = {
+          name: zoneName,
+          type: '警示区',
+          groupId: currentGroup.id,
+          createTime: new Date().toISOString(),
+          pointCount: currentGroup.markers.length,
+          points: currentGroup.markers.map(item => ({
+            sequence: item.sequence,
+            latitude: parseFloat(item.point.lat),
+            longitude: parseFloat(item.point.lng)
+          }))
+        };
+        
+        const content = JSON.stringify(data, null, 2);
+        const blob = new Blob([content], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${zoneName}-警示区数据-${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { 
+          document.body.removeChild(a); 
+          URL.revokeObjectURL(url); 
+        }, 0);
+        
+        showToast('警示区数据导出成功');
+      }
+    }
+    
+    // 更新点位计数
+    function updatePointCount(zoneType) {
+      if (zoneType === 'safe') {
+        document.getElementById('safe-point-count').textContent = `${safeZoneData.markers.length} 个点位`;
+      } else {
+        const currentGroup = warningZoneGroups.find(group => group.id === currentWarningGroupId);
+        if (currentGroup) {
+          document.getElementById('warning-point-count').textContent = `${currentGroup.markers.length} 个点位`;
+        }
+      }
+    }
+    
+    // 更新按钮状态
+    function updateButtonStates(zoneType) {
+      if (zoneType === 'safe') {
+        const hasPoints = safeZoneData.markers.length > 0;
+        document.getElementById('export-safe').disabled = !hasPoints;
+        document.getElementById('clear-safe').disabled = !hasPoints;
+      } else {
+        const currentGroup = warningZoneGroups.find(group => group.id === currentWarningGroupId);
+        if (currentGroup) {
+          const hasPoints = currentGroup.markers.length > 0;
+          document.getElementById('export-warning').disabled = !hasPoints;
+          document.getElementById('clear-warning').disabled = !hasPoints;
+        }
+        // 删除组按钮始终可用（除非只剩一个组）
+        document.getElementById('delete-warning-group').disabled = warningZoneGroups.length <= 1;
+      }
+    }
+    
+    // 显示提示信息
+    function showToast(message) {
+      const toast = document.getElementById('copy-toast');
+      toast.textContent = message;
+      toast.classList.remove('opacity-0', 'translate-y-4');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-4');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 2000);
+    }
+    
+    // 页面加载完成后初始化地图
+    window.onload = function() {
+      initMap();
+      // 默认显示安全区
+      switchZone('safe');
+    };
+    
+    // 暴露deletePoint函数到全局，让信息窗口可以调用
+    window.deletePoint = deletePoint;
+    
+    // HTML 转义函数
+    function escapeHtml(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  </script>
+</body>
+</html>
